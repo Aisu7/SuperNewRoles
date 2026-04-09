@@ -125,6 +125,9 @@ public static class Statics
         50656275,
         50656275 + 25,
 
+        50652425,
+        50652425 + 25
+
 
         // ComputeAmongUsBroadcastVersion(2024, 8, 10, 0),
         // ComputeAmongUsBroadcastVersion(2024, 8, 10, 0) + 25,
