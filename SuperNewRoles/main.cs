@@ -102,6 +102,8 @@ public partial class SuperNewRolesPlugin : BasePlugin
         SuperNewRoles.Logger.Info($"BaseDirectory: {BaseDirectory}");
         SuperNewRoles.Logger.Info($"SecretDirectory: {SecretDirectory}");
 
+        SuperNewRoles.Logger.Info($"Current version: {Constants.GetBroadcastVersion()}");
+
         SuperNewRoles.Patches.CursedTasks.Main.ClearAndReload();
 
         RegisterCustomObjects();
