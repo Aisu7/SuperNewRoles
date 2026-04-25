@@ -19,6 +19,7 @@ public enum RoleId : short
     Jackal,
     Sidekick,
     JackalFriends,
+    MayorFriends,
     Balancer,
     Samurai,
     SelfBomber,
@@ -151,6 +152,7 @@ public enum RoleId : short
     PoliceSurgeon,
     Banshee,
     TriggerHappy,
+    ElectionCommissioner
 }
 
 public enum GhostRoleId : short
