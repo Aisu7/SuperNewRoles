@@ -120,13 +120,13 @@ public static class AssignRoles
             AssignTickets_NotHundredPercent[AssignedTeamType.Neutral],
             false, MaxNeutrals);
 
-            #ジャッカルが排出されなければ、ジャッカルフレンズも排出しない
+            // ジャッカルが排出されなければ、ジャッカルフレンズも排出しない
             if (JackalFriends.JackalFriendsDontAssignIfJackalNotAssigned && !ExPlayerControl.ExPlayerControls.Any(player => player.IsJackalTeam()))
             {
                 AssignTickets_HundredPercent[AssignedTeamType.Crewmate].RemoveAll(ticket => ticket.RoleOption.RoleId == RoleId.JackalFriends);
                 AssignTickets_NotHundredPercent[AssignedTeamType.Crewmate].RemoveAll(ticket => ticket.RoleOption.RoleId == RoleId.JackalFriends);
             }
-            #ジャッカルが排出されなければ、メイヤーフレンズも排出しない
+            // ジャッカルが排出されなければ、メイヤーフレンズも排出しない
             if (JackalFriends.JackalFriendsDontAssignIfJackalNotAssigned && !ExPlayerControl.ExPlayerControls.Any(player => player.IsJackalTeam()))
             {
                 AssignTickets_HundredPercent[AssignedTeamType.Crewmate].RemoveAll(ticket => ticket.RoleOption.RoleId == RoleId.JackalFriends);
