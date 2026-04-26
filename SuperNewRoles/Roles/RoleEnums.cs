@@ -19,7 +19,6 @@ public enum RoleId : short
     Jackal,
     Sidekick,
     JackalFriends,
-    MayorFriends,
     Balancer,
     Samurai,
     SelfBomber,
