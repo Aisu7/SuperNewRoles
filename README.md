@@ -1,9 +1,5 @@
 # SuperNewRoles
 ![SNRImage](/images/SNRImage.png)
-試しにフォークしたものです。
-これはSupeNewRolesをフォークしたものです。本家はこちら
-https://github.com/SuperNewRoles/SuperNewRoles
-
 > This mod is not affiliated with Among Us or Innersloth LLC, and the content contained therein is not endorsed or otherwise sponsored by Innersloth LLC. Portions of the materials contained herein are property of Innersloth LLC. © Innersloth LLC.
 > 訳: これはInnerslothが作ったものじゃなくて個人が作ったものなのでInnerslothは関係ないよ！また、この中にある素材の一部はInnerslothのものだよ！
 
