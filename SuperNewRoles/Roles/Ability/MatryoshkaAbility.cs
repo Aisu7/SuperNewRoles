@@ -9,6 +9,7 @@ using SuperNewRoles.Modules.Events.Bases;
 using SuperNewRoles.Patches;
 using SuperNewRoles.Roles.Ability.CustomButton;
 using SuperNewRoles.Roles.Impostor;
+using SuperNewRoles.CustomCosmetics.CosmeticsPlayer;
 using UnityEngine;
 
 namespace SuperNewRoles.Roles.Ability;
@@ -35,6 +36,8 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
     public float EffectTimer { get; set; }
 
     private int Counter = 0;
+    // 着用前の自分のカラーIDを保存（setOutfitがDefaultOutfitを上書きするため着用時に事前保存が必要）
+    private int _originalColorId = -1;
 
     private CustomKillButtonAbility customKillButtonAbility;
 
@@ -52,6 +55,12 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
 
     public override bool CheckIsAvailable()
     {
+        // ファングルのキノコサボタージュ中は使用不可。
+        // サボ終了時に Among Us が全員の見た目をリセットするため、
+        // 着用中の外見が上書きされる危険がある。
+        if (SaboStateTracker.activeSaboTypes.Contains(SystemTypes.MushroomMixupSabotage))
+            return false;
+
         targetPlayer = GetClosestDeadBody();
         return targetPlayer != null && PlayerControl.LocalPlayer.CanMove;
     }
@@ -176,21 +185,29 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
     private static void UnlockMatryoshka(MatryoshkaAbility source, Vector3 position)
     {
         DeadBody deadBody = source.currentWearingBody;
-        // 着用解除
         if (deadBody != null)
         {
-            // 元の見た目に戻す
+            // 着用前の色ID（setOutfitがDefaultOutfitを上書きしてしまうため事前保存した値）で復元
+            int restoreColorId = source._originalColorId >= 0
+                ? source._originalColorId
+                : source.Player.Data.DefaultOutfit.ColorId;
+
+            // バニラ見た目を元に戻す
             source.Player.Player.setOutfit(source.Player.Data.DefaultOutfit);
 
-            // 報告可能に戻す
+            // カスタムコスメティクス4層を Default に戻す
+            var layer = CustomCosmeticsLayers.ExistsOrInitialize(source.Player.Player.cosmetics);
+            if (layer.hat1 != null) { layer.hat1.gameObject.SetActive(true); layer.hat1.FinishShapeshift(restoreColorId); }
+            if (layer.hat2 != null) { layer.hat2.gameObject.SetActive(true); layer.hat2.FinishShapeshift(restoreColorId); }
+            if (layer.visor1 != null) { layer.visor1.gameObject.SetActive(true); layer.visor1.FinishShapeshift(restoreColorId); }
+            if (layer.visor2 != null) { layer.visor2.gameObject.SetActive(true); layer.visor2.FinishShapeshift(restoreColorId); }
+
+            source._originalColorId = -1;
+
+            // 死体を報告可能に戻す
             deadBody.Reported = false;
-
-            // レンダラーを表示する
             foreach (SpriteRenderer renderer in deadBody.bodyRenderers)
-            {
                 renderer.enabled = true;
-            }
-
             deadBody.myCollider.enabled = true;
             deadBody.transform.position = position;
         }
@@ -224,8 +241,27 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
 
             if (targetBody == null) return;
 
-            // 死体の見た目にする
+            // setOutfit は DefaultOutfit を上書きするため、先に自分の色を保存する
+            source._originalColorId = source.Player.Data.DefaultOutfit.ColorId;
+
+            // バニラ見た目を死体の人に合わせる
             source.Player.Player.setOutfit(target.Data.DefaultOutfit);
+
+            // 自分（source）の CustomCosmeticsLayer に、死体（target）の hat/visor をコピーする。
+            // これにより「死体の人と同じカスタムコスメが source に表示」され、
+            // target 側の layer には一切触れないため、死体のカスタムコスメが消えることもない。
+            var sourceLayer = CustomCosmeticsLayers.ExistsOrInitialize(source.Player.Player.cosmetics);
+            var targetLayer = CustomCosmeticsLayers.ExistsOrInitialize(target.Player.cosmetics);
+            int targetColorId = target.Data.DefaultOutfit.ColorId;
+
+            if (sourceLayer.hat1 != null)
+                sourceLayer.hat1.SetShapeshiftHat(targetLayer.hat1?.DefaultHat?.ProdId ?? HatData.EmptyId, targetColorId);
+            if (sourceLayer.hat2 != null)
+                sourceLayer.hat2.SetShapeshiftHat(targetLayer.hat2?.DefaultHat?.ProdId ?? HatData.EmptyId, targetColorId);
+            if (sourceLayer.visor1 != null)
+                sourceLayer.visor1.SetShapeshiftVisor(targetLayer.visor1?.DefaultVisor?.ProdId ?? VisorData.EmptyId, targetColorId);
+            if (sourceLayer.visor2 != null)
+                sourceLayer.visor2.SetShapeshiftVisor(targetLayer.visor2?.DefaultVisor?.ProdId ?? VisorData.EmptyId, targetColorId);
 
             // 報告不可能にする
             targetBody.Reported = !source.Data.WearReport;
