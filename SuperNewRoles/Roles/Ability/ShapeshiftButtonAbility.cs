@@ -28,6 +28,7 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
         _shapeTarget = null;
         PlayerControl.LocalPlayer.RpcShapeshift(PlayerControl.LocalPlayer, true); // Revert shape
         ResetTimer(); // Start cooldown
+        ResetLocalPlayerScale(); // 変身解除後のスケール戻し
     };
 
     public float EffectDuration => DurationTime;
@@ -107,16 +108,19 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
         }
         PlayerControl.LocalPlayer.RpcShapeshiftModded(ExPlayerControl.LocalPlayer, false);
         ResetTimer(); // Reset cooldown for next round
+        ResetLocalPlayerScale(); // 変身解除後のスケール戻し
     }
 
     private EventListener<ShapeshiftEventData> _shapeshiftEvent;
     private EventListener<WrapUpEventData> _wrapUpEvent;
+    private EventListener<CalledMeetingEventData> _calledMeetingEvent;
 
     public override void AttachToLocalPlayer()
     {
         base.AttachToLocalPlayer();
         _shapeshiftEvent = ShapeshiftEvent.Instance.AddListener(OnShapeshift);
         _wrapUpEvent = WrapUpEvent.Instance.AddListener(OnWrapUp);
+        _calledMeetingEvent = CalledMeetingEvent.Instance.AddListener(OnCalledMeeting);
     }
 
     public override void DetachToLocalPlayer()
@@ -124,6 +128,7 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
         base.DetachToLocalPlayer();
         _shapeshiftEvent?.RemoveListener();
         _wrapUpEvent?.RemoveListener();
+        _calledMeetingEvent?.RemoveListener();
 
         // Ensure player reverts shape if the ability is detached while active
         if (isEffectActive)
@@ -132,6 +137,37 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
             _shapeTarget = null;
             PlayerControl.LocalPlayer.RpcShapeshiftModded(ExPlayerControl.LocalPlayer, false);
         }
+    }
+
+    /// <summary>
+    /// 会議招集時に変身中だった場合は即時解除する。
+    /// 解除しないまま会議に入ると WrapUp 後にバグった状態でターンが始まる。
+    /// </summary>
+    private void OnCalledMeeting(CalledMeetingEventData data)
+    {
+        if (!isEffectActive) return;
+        isEffectActive = false;
+        _shapeTarget = null;
+        EffectTimer = 0;
+        PlayerControl.LocalPlayer.RpcShapeshiftModded(ExPlayerControl.LocalPlayer, false);
+        ResetTimer();
+        ResetLocalPlayerScale(); // 変身解除後のスケール戻し
+    }
+
+    /// <summary>
+    /// 変身解除後に自分視点でプレイヤーのサイズが小さいまま残るバグへの対処。
+    /// シェイプシフトアニメーション（縮小 → 拡大）の拡大フェーズが
+    /// 正常に完了しない場合に localScale が Vector3.one に戻らないため、
+    /// 一定時間後に強制リセットする。他クライアントは影響を受けない。
+    /// </summary>
+    private static void ResetLocalPlayerScale()
+    {
+        new LateTask(() =>
+        {
+            var local = PlayerControl.LocalPlayer;
+            if (local != null && local.transform.localScale != Vector3.one)
+                local.transform.localScale = Vector3.one;
+        }, 0.5f, "ResetScaleAfterShapeshift");
     }
 }
 
