@@ -44,10 +44,10 @@ class Hitman : RoleBase<Hitman>
     public override RoleId[] RelatedRoleIds { get; } = [];
 
     // 殺し屋の設定
-    [CustomOptionFloat("HitmanKillCooldown", 2.5f, 60f, 2.5f, 30f, translationName: "CoolTime")]
+    [CustomOptionFloat("HitmanKillCooldown", 2.5f, 60f, 2.5f, 25f, translationName: "CoolTime")]
     public static float HitmanKillCooldown;
 
-    [CustomOptionFloat("HitmanChangeTargetTime", 10f, 60f, 2.5f, 60f)]
+    [CustomOptionFloat("HitmanChangeTargetTime", 10f, 60f, 2.5f, 35f)]
     public static float HitmanChangeTargetTime;
 
     [CustomOptionInt("HitmanWinKillCount", 1, 10, 1, 3)]
@@ -205,7 +205,10 @@ public class HitmanAbility : AbilityBase
         _successCount++;
         if (_successCount >= Data.WinKillCount)
         {
-            EndGamer.RpcEndGameWithWinner(CustomGameOverReason.HitmanWin, WinType.Default, [Player], Hitman.Instance.RoleColor, "Hitman", string.Empty);
+            // 独自単独勝利のため、他の独自単独勝利役職(アーソニスト等)と同様 SingleNeutral を使用する。
+            // 従来 WinType.Default だったため UpdateHijackers が呼ばれてしまい、
+            // 神やマグロ等の横取り役職に上書きされるバグがあった。
+            EndGamer.RpcEndGameWithWinner(CustomGameOverReason.HitmanWin, WinType.SingleNeutral, [Player], Hitman.Instance.RoleColor, "Hitman", string.Empty);
         }
         reSelect();
         RpcSyncCount();
