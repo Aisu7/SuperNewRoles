@@ -24,6 +24,7 @@ public class CamouflagerAbility : AbilityBase
     public bool _isCamouflaged { get; private set; }
 
     private EventListener<MeetingStartEventData> _meetingStartListener;
+    private EventListener<WrapUpEventData> _wrapUpListener;
 
     public CamouflagerAbility(CamouflagerAbilityOption option)
     {
@@ -39,6 +40,7 @@ public class CamouflagerAbility : AbilityBase
 
         _camouflageButtonAbility = new CamouflageButtonAbility(CoolTime, DurationTime, this);
         _meetingStartListener = MeetingStartEvent.Instance.AddListener(OnMeetingStart);
+        _wrapUpListener = WrapUpEvent.Instance.AddListener(OnWrapUp);
         Player.AttachAbility(_camouflageButtonAbility, new AbilityParentAbility(this));
     }
 
@@ -47,11 +49,51 @@ public class CamouflagerAbility : AbilityBase
         EndCamouflage();
     }
 
+    public void OnWrapUp(WrapUpEventData data)
+    {
+        // 会議中にカモフラが終了した場合、会議明けに元の外見に戻す
+        // MeetingStartEvent で EndCamouflage() を呼ぶが、
+        // 会議明けの WrapUp でも元の外見が正しく反映されるよう再適用する
+        if (_isCamouflaged) return; // まだカモフラ中なら何もしない
+        if (_originalOutfits.Count == 0) return; // 既に復元済みなら何もしない
+
+        // 会議前にカモフラ終了した = _originalOutfits に元データが残っている場合のみ復元
+        foreach (var player in PlayerControl.AllPlayerControls)
+        {
+            if (player == null || player.Data.Disconnected) continue;
+            if (!_originalOutfits.ContainsKey(player.PlayerId)) continue;
+
+            var originalOutfit = _originalOutfits[player.PlayerId];
+            var outfit = new NetworkedPlayerInfo.PlayerOutfit
+            {
+                PlayerName = originalOutfit.PlayerName,
+                ColorId = originalOutfit.ColorId,
+                SkinId = originalOutfit.SkinId,
+                HatId = originalOutfit.Hat1Id,
+                VisorId = originalOutfit.Visor1Id,
+                PetId = originalOutfit.PetId
+            };
+            player.setOutfit(outfit);
+
+            CustomCosmeticsLayer layer = CustomCosmeticsLayers.ExistsOrInitialize(player.cosmetics);
+            layer.hat1.gameObject.SetActive(true);
+            layer.hat1.FinishShapeshift(originalOutfit.ColorId);
+            layer.visor1.gameObject.SetActive(true);
+            layer.visor1.FinishShapeshift(originalOutfit.ColorId);
+            layer.hat2.gameObject.SetActive(true);
+            layer.hat2.FinishShapeshift(originalOutfit.ColorId);
+            layer.visor2.gameObject.SetActive(true);
+            layer.visor2.FinishShapeshift(originalOutfit.ColorId);
+        }
+        _originalOutfits.Clear();
+    }
+
     public override void DetachToAlls()
     {
         EndCamouflage();
         base.DetachToAlls();
         _meetingStartListener?.RemoveListener();
+        _wrapUpListener?.RemoveListener();
     }
 
     [CustomRPC]
@@ -122,8 +164,14 @@ public class CamouflagerAbility : AbilityBase
             player.setOutfit(camouflageOutfit);
 
             CustomCosmeticsLayer layer = CustomCosmeticsLayers.ExistsOrInitialize(player.cosmetics);
-            layer.visor2.StartCamouflage(camouflageOutfit.ColorId);
-            layer.hat2.StartCamouflage(camouflageOutfit.ColorId);
+            // hat1/visor1 は StartCamouflage で EmptyHat に差し替え（正常に隠れる）
+            layer.hat1.StartCamouflage(camouflageOutfit.ColorId);
+            layer.visor1.StartCamouflage(camouflageOutfit.ColorId);
+            // hat2/visor2 は LateUpdate() が毎フレーム sprite と FlipX を上書きするため
+            // StartCamouflage を呼んでも虹色・向き固定になってしまう。
+            // SetActive(false) で物理的に非表示にすることで LateUpdate の影響を回避する。
+            layer.hat2.gameObject.SetActive(false);
+            layer.visor2.gameObject.SetActive(false);
         }
     }
 
@@ -181,6 +229,11 @@ public class CamouflagerAbility : AbilityBase
             player.setOutfit(outfit);
 
             CustomCosmeticsLayer layer = CustomCosmeticsLayers.ExistsOrInitialize(player.cosmetics);
+            // hat1/visor1/hat2/visor2 の4層すべてを元に戻す
+            layer.hat1.gameObject.SetActive(true);
+            layer.hat1.FinishShapeshift(originalOutfit.ColorId);
+            layer.visor1.gameObject.SetActive(true);
+            layer.visor1.FinishShapeshift(originalOutfit.ColorId);
             layer.hat2.gameObject.SetActive(true);
             layer.hat2.FinishShapeshift(originalOutfit.ColorId);
             layer.visor2.gameObject.SetActive(true);
