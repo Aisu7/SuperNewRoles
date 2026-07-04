@@ -75,7 +75,9 @@ internal class ArrowToNearPlayerAbility : AbilityBase
             UpdateArrows();
             _timer = _updateInterval;
         }
-        _arrow.Update(_lastTargetPosition);
+        // 矢印の描画位置は毎フレーム更新してなめらかに動かす
+        // （ターゲット座標の再計算は上のタイマーで間引いている）
+        _arrow?.Update(_lastTargetPosition);
     }
 
     private void UpdateArrows()
