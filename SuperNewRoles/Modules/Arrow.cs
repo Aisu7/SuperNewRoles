@@ -12,6 +12,15 @@ public class Arrow
     public GameObject arrow;
     private Vector3 oldTarget;
 
+    // Camera.main は毎回タグ検索（FindGameObjectWithTag）が走るため、キャッシュして負荷を削減する
+    private Camera _cachedCamera;
+    private Camera GetCamera()
+    {
+        if (_cachedCamera == null)
+            _cachedCamera = Camera.main;
+        return _cachedCamera;
+    }
+
     public static Sprite GetSprite() => AssetManager.GetAsset<Sprite>("Arrow.png");
 
     public Arrow(Color color)
@@ -32,7 +41,8 @@ public class Arrow
 
         if (color.HasValue) image.color = color.Value;
 
-        Camera main = Camera.main;
+        Camera main = GetCamera();
+        if (main == null) return;
         Vector2 vector = target - main.transform.position;
         float num = vector.magnitude / (main.orthographicSize * perc);
         image.enabled = (double)num > 0.3;
