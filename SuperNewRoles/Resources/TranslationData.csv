@@ -2,6 +2,8 @@
 creditsMain,Created by ykundesu,Created by ykundesu,由 ykundesu 制作,由 ykundesu 製作
 WelcomeNextSuperNewRoles,新しいSuperNewRolesへ、ようこそ！,Welcome to the new SuperNewRoles!,欢迎来到全新的 SuperNewRoles!,歡迎來到全新的 SuperNewRoles!
 Close,閉じる,Close,关闭,關閉
+CustomCosmetics_Loading,Modコスメティック(ハットやバイザーなど)を読み込んでいます,Loading mod cosmetics (hats / visors / etc.)
+CustomCosmetics_Loaded,コスメティック 読み込み完了！,Cosmetics loaded!
 
 Impostor,インポスター,Impostor,伪装者,偽裝者
 Crewmate,クルーメイト,Crewmate,船员,船員
@@ -165,6 +167,11 @@ GhostVoteDisplayType.Show,表示,Show,显示,顯示
 GhostVoteDisplayType.Hide,非表示,Hide,隐藏,隱藏
 ChangeReportDistance,レポート距離を変更する,Change report distance,修改报告尸体距离,修改報告屍體距離
 ReportDistanceOption,レポート距離,Report distance,报告距离,報告距離
+IsLimitEmergencyMeeting,緊急会議を使用できる回数を制限する,Limit emergency meeting uses,限制紧急会议召开次数,限制緊急會議召集次數
+EmergencyMeetingLimitCount,緊急会議 全体使用可能回数,Emergency meeting total uses,全体紧急会议最大召开次数,緊急會議總使用次數
+MeetingStatusPersonalEmergencyCount,クルー {0} が持つ 緊急会議残り {1} 回,Crewmember {0} has {1} emergency meetings left,玩家 {0} 剩余 {1} 次紧急会议,船員 {0} 剩餘 {1} 次緊急會議
+MeetingStatusAllEmergencyCount,クルー全体が持つ 緊急会議残り {0} 回,All crewmembers have {0} emergency meetings left,全体玩家剩余 {0} 次紧急会议,全體船員剩餘 {0} 次緊急會議
+MeetingStatusUpperLimitReached,緊急会議は\n全体の使用可能回数に達した,Emergency meetings cannot be used\nbecause the total limit was reached,紧急会议次数已用尽\n无法召开,達到上限\n緊急會議無法召開
 CustomAprilFools,エイプリルフールを有効にする,Enabled aprilfools,启用愚人节模式,啟用愚人節模式
 AprilFoolsOutfitType,姿,Outfit type,外观类型,外觀類型
 AprilFoolsOutfitType.None,なし,None,无变化,無變化
@@ -251,6 +258,8 @@ ClientOptions.CPUProcessorAffinity,CPU使用コアを制限,Limit CPU cores,限�
 ClientOptions.ProcessorAffinityMask,使用するCPUコア数,CPU cores to use,要使用的CPU核心数,要使用的CPU核心數
 ClientOptions.ProcessorAffinityMask.OneCore,1コア,1 core,1核,1核心
 ClientOptions.ProcessorAffinityMask.TwoCores,2コア,2 cores,2核,2核心
+ClientOptions.ResetCustomCosmeticsCache,カスタムコスメティックのキャッシュを削除する,Clear the custom cosmetics cache,清除自定义装扮缓存,清除自訂裝扮快取
+ClientOptions.ResetCustomCosmeticsCacheRequested,カスタムコスメティックのキャッシュを削除します！,Clear custom cosmetics cache on next launch!,下次启动时清除自定义装扮缓存！,下次啟動時清除自訂裝扮快取！
 
 # winners
 Winners.NoData,データがありません,No data,没有数据,沒有數據
@@ -1764,9 +1773,9 @@ ModifierCrewmateChance,クルーメイト確率,Crewmate Chance,船员概率,船
 
 # Slugger Options
 SluggerChargeTime,チャージ時間,Charge Time,蓄力时间,蓄力時間
-SluggerIsMultiKill,複数キルを許可,Allow Multi-Kill,允许多重击杀,允许多重擊殺
-SluggerIsSyncKillCoolTime,キルクールタイム同期,Sync Kill Cooldown,同步击杀冷却,同步擊殺冷卻
-SluggerCanKillWhileCharging,チャージ中にキル可能,Killable while charging,蓄力中可击杀,蓄力中可擊殺
+SluggerIsMultiKill,範囲キル,Area of Effect kill,范围击杀,範圍擊殺
+SluggerIsSyncKillCoolTime,キルクールタイムを能力と同期,Sync Kill Cooldown,同步击杀冷却,同步擊殺冷卻
+SluggerCanKillWhileCharging,チャージ中のキルボタンの使用,Killable while charging,蓄力中可击杀,蓄力中可擊殺
 SluggerButtonName,スラッガー！,Slugger!,击球,擊球
 
 # Kunoichi Options
