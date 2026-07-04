@@ -78,7 +78,6 @@ class BanParticularPlayerPatch
             return;
 
         // ロビー（GameStates.Joined）以外のタイミングで呼ばれた場合はスキップ
-        // ゲーム終了→ロビー復帰時などの遷移中は FriendCode 等がまだ揃っていないため
         if (AmongUsClient.Instance.GameState != InnerNet.InnerNetClient.GameStates.Joined)
             return;
 
@@ -87,65 +86,46 @@ class BanParticularPlayerPatch
                                                    GeneralSettingOptions.KickPCPlayers,
                                                    GeneralSettingOptions.KickAndroidPlayers,
                                                    GeneralSettingOptions.KickOtherPlayers))
-            return; // キックされた場合は以降の処理をスキップ
+            return;
 
-        // フレンドコードのチェック（フレンドコードを持っていない人をBANする）
-        // 同じクライアントに対して既にチェック待機中の場合はコルーチンを追加起動しない
+        // フレンドコードのチェック
+        // コルーチン（WrapToIl2Cpp）はSNRコードベースでは使用しないため LateTask で代替する。
+        // FriendCode は参加直後には届いていない場合があるため 0.5 秒後に判定する。
         if (GeneralSettingOptions.BanNoFriendCodePlayers && !_pendingCheckClientIds.Contains(client.Id))
         {
-            AmongUsClient.Instance.StartCoroutine(
-                CheckFriendCodeDelayed(client).WrapToIl2Cpp()
-            );
+            int clientId = client.Id;
+            _pendingCheckClientIds.Add(clientId);
+
+            new LateTask(() =>
+            {
+                _pendingCheckClientIds.Remove(clientId);
+
+                // 待機後の状態再チェック
+                if (!AmongUsClient.Instance.AmHost) return;
+                if (AmongUsClient.Instance.ClientId == clientId) return;
+                if (AmongUsClient.Instance.GameState != InnerNet.InnerNetClient.GameStates.Joined) return;
+
+                // client オブジェクトが既に無効になっている可能性があるため
+                // allClients から再取得して最新の FriendCode を確認する
+                ClientData latestClient = null;
+                foreach (var c in AmongUsClient.Instance.allClients)
+                {
+                    if (c.Id == clientId)
+                    {
+                        latestClient = c;
+                        break;
+                    }
+                }
+
+                if (latestClient == null) return;
+
+                if (string.IsNullOrEmpty(latestClient.FriendCode) || !latestClient.FriendCode.Contains("#"))
+                {
+                    AmongUsClient.Instance.KickPlayer(clientId, true);
+                    SuperNewRoles.Logger.Info($"フレンドコードを持っていないプレイヤー {latestClient.PlayerName} をBANしました");
+                }
+            }, 0.5f, "BanNoFriendCodeCheck");
         }
-    }
-
-    // FriendCode チェックを最大0.5秒待機してから行う（時間ベースのリトライ戦略）
-    //
-    // 【なぜ Time.deltaTime を使うか】
-    //   yield return null は「1フレーム待つ」命令のため、
-    //   60fps 環境では 1フレーム = 約16ms、120fps 環境では 約8ms と変わる。
-    //   フレーム数で待機すると fps によってタイムアウト時間がズレるため、
-    //   Time.deltaTime（前フレームの経過秒数）を積算し、実時間で計測する。
-    //
-    // 【なぜ 0.5 秒か】
-    //   FriendCode は参加直後の UDP パケットで届くが、
-    //   国内サーバーで 50〜100ms、海外サーバーで 150〜300ms 程度の遅延がある。
-    //   安全マージンを含め 500ms あれば、不安定な接続でも正規プレイヤーを誤BANしない。
-    private static System.Collections.IEnumerator CheckFriendCodeDelayed(ClientData client)
-    {
-        int clientId = client.Id;
-        _pendingCheckClientIds.Add(clientId);
-
-        // FriendCode が届くまで最大 0.5 秒待機する（Time.deltaTime による実時間計測）
-        const float timeoutSeconds = 0.5f;
-        float elapsed = 0f;
-        while (elapsed < timeoutSeconds && string.IsNullOrEmpty(client.FriendCode))
-        {
-            yield return null;
-            elapsed += Time.deltaTime;
-        }
-
-        // 待機終了後の状態再チェック
-        // ・ホスト権限を失っていたらスキップ
-        // ・ゲームが開始されていたらスキップ（ロビー以外は判定しない）
-        // ・自分自身（念のため再確認）はスキップ
-        if (client == null ||
-            !AmongUsClient.Instance.AmHost ||
-            AmongUsClient.Instance.ClientId == clientId ||
-            AmongUsClient.Instance.GameState != InnerNet.InnerNetClient.GameStates.Joined)
-        {
-            _pendingCheckClientIds.Remove(clientId);
-            yield break;
-        }
-
-        // BAN判定：FriendCode が空か "#" を含まない場合はBANする
-        if (string.IsNullOrEmpty(client.FriendCode) || !client.FriendCode.Contains("#"))
-        {
-            AmongUsClient.Instance.KickPlayer(clientId, true);
-            SuperNewRoles.Logger.Info($"フレンドコードを持っていないプレイヤー {client.PlayerName} をBANしました");
-        }
-
-        _pendingCheckClientIds.Remove(clientId);
     }
 }
 
