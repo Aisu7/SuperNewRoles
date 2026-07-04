@@ -1,432 +1,610 @@
 using System;
-using AmongUs.GameOptions;
+using UnityEngine;
+using SuperNewRoles.Modules;
+using SuperNewRoles.Roles.Ability.CustomButton;
+using UnityEngine.Events;
+using System.Linq;
+using System.Collections.Generic;
+using HarmonyLib;
 using SuperNewRoles.Events;
 using SuperNewRoles.Events.PCEvents;
-using SuperNewRoles.Modules;
 using SuperNewRoles.Modules.Events.Bases;
-using SuperNewRoles.Roles.CrewMate;
-using SuperNewRoles.Roles.Neutral;
-using TMPro;
-using UnityEngine;
 
 namespace SuperNewRoles.Roles.Ability;
 
-public record SchrodingersCatData(
-    bool HasKillAbility,
-    float KillCooldown,
-    bool KillVictimSuicide,
-    float SuicideTime,
-    bool BeCrewOnExile,
-    bool CrewOnKillByNonSpecific
-);
-public enum SchrodingersCatTeam
+public class GuesserAbility : CustomMeetingButtonBase, IAbilityCount
 {
-    SchrodingersCat,
-    Crewmate,
-    Madmate,
-    Impostor,
-    Friends,
-    Jackal,
-    Pavlovs,
-    PavlovFriends,
-}
-public class SchrodingersCatAbility : AbilityBase
-{
-    private SchrodingersCatData Data { get; }
-    private CustomKillButtonAbility _customKillButtonAbility;
-    private KnowOtherAbility _knowOtherAbility;
-    private CustomVentAbility _customVentAbility;
-    private CustomSaboAbility _customSaboAbility;
-    private ImpostorVisionAbility _impostorVisionAbility;
-    private EventListener<TryKillEventData> _murderListener;
-    private EventListener<NameTextUpdateEventData> _nameTextUpdateListener;
-    private EventListener<WrapUpEventData> _wrapUpListener;
-    private EventListener _fixedUpdateListener;
+    private readonly int shotsPerMeeting;
+    private readonly bool cannotShootCrewmate;
+    private readonly bool cannotShootCelebrity;
+    private readonly bool cannotShootFirstTurn;
+    private readonly bool cannotShootNoDead;
+    private readonly bool CelebrityLimitedTurns;
+    private readonly int CelebrityLimitedTurnsCount;
+    private readonly int maxShots;
+    private readonly bool madmateSuicide;
+    // ※ 画面上に既にUIが存在しているか確認するためのフィールド
+    private GameObject guesserUI;
+    private bool HideButtons = false;
+    public override bool HasButtonLocalPlayer => false;
+    private int ShotThisMeeting;
+    private int MeetingCount = -1;
+    private TMPro.TextMeshPro limitText;
+    public override Sprite Sprite => AssetManager.GetAsset<Sprite>("TargetIcon.png");
+    private EventListener<DieEventData> dieEventListener;
+    private bool anyoneDied = false;
 
-    private float suicideTimer;
-    private ExPlayerControl _suicideTarget;
-    private TextMeshPro _suicideText;
-
-    public SchrodingersCatTeam CurrentTeam { get; private set; } = SchrodingersCatTeam.SchrodingersCat;
-
-    // 連打対策：陣営変化の RPC が全クライアントに伝播する前に
-    // 2回目のキルが処理されないようにするデバウンスフラグ
-    private bool _isProcessingKill = false;
-
-    public SchrodingersCatAbility(SchrodingersCatData data)
+    public GuesserAbility(int maxShots, int shotsPerMeeting, bool cannotShootCrewmate, bool cannotShootCelebrity, bool celebrityLimitedTurns = false, int celebrityLimitedTurnsCount = 3, bool madmateSuicide = false, bool cannotShootFirstTurn = false, bool cannotShootNoDead = false)
     {
-        Data = data;
-        CurrentTeam = SchrodingersCatTeam.SchrodingersCat;
+        this.maxShots = maxShots;
+        this.shotsPerMeeting = shotsPerMeeting;
+        this.cannotShootCrewmate = cannotShootCrewmate;
+        this.cannotShootCelebrity = cannotShootCelebrity;
+        this.cannotShootFirstTurn = cannotShootFirstTurn;
+        this.cannotShootNoDead = cannotShootNoDead;
+        this.CelebrityLimitedTurns = celebrityLimitedTurns;
+        this.CelebrityLimitedTurnsCount = celebrityLimitedTurnsCount;
+        this.madmateSuicide = madmateSuicide;
+        Count = maxShots;
     }
 
-    public override void AttachToAlls()
+    public override void AttachToLocalPlayer()
     {
-        _knowOtherAbility = new KnowOtherAbility(
-            (player) => CurrentTeam != SchrodingersCatTeam.SchrodingersCat && CanKnow(player),
-            () => false
-        );
-        _customVentAbility = new CustomVentAbility(
-            () => CurrentTeam != SchrodingersCatTeam.SchrodingersCat && CouldUseVent()
-        );
-        _customSaboAbility = new CustomSaboAbility(
-            () => CurrentTeam != SchrodingersCatTeam.SchrodingersCat && CouldUseSabo()
-        );
-        _impostorVisionAbility = new ImpostorVisionAbility(
-            () => CurrentTeam != SchrodingersCatTeam.SchrodingersCat && IsImpostorVision()
-        );
-        Player.AttachAbility(_knowOtherAbility, new AbilityParentAbility(this));
-        Player.AttachAbility(_customVentAbility, new AbilityParentAbility(this));
-        Player.AttachAbility(_customSaboAbility, new AbilityParentAbility(this));
-        Player.AttachAbility(_impostorVisionAbility, new AbilityParentAbility(this));
+        base.AttachToLocalPlayer();
+        dieEventListener = DieEvent.Instance.AddListener(OnPlayerDie);
+    }
+    public override void DetachToLocalPlayer()
+    {
+        base.DetachToLocalPlayer();
+        dieEventListener?.RemoveListener();
+    }
+    private void OnPlayerDie(DieEventData data)
+    {
+        anyoneDied = true;
+    }
 
-        _murderListener = TryKillEvent.Instance.AddListener(TryMurder);
-        _nameTextUpdateListener = NameTextUpdateEvent.Instance.AddListener(OnNameTextUpdate);
-        _wrapUpListener = WrapUpEvent.Instance.AddListener(OnWrapUp);
-        _fixedUpdateListener = FixedUpdateEvent.Instance.AddListener(OnFixedUpdate);
-    }
-    public override void DetachToAlls()
+    public override bool CheckHasButton(ExPlayerControl player)
     {
-        _murderListener?.RemoveListener();
-        _nameTextUpdateListener?.RemoveListener();
-        _wrapUpListener?.RemoveListener();
-        _fixedUpdateListener?.RemoveListener();
+        if (CannotShootThisMeeting(player))
+            return false;
+        if (ExPlayerControl.LocalPlayer.IsDead())
+            return false;
+        // 既にUIを開いているなどの要因の場合は、ボタンを表示しないことでUIの重複を防止する
+        if (HideButtons)
+            return false;
+        if (!HasCount || player.IsDead())
+            return false;
+        // 既に今のミーティングで撃った回数が上限に達している場合は、これ以上撃てないようにする
+        if (ShotThisMeeting >= shotsPerMeeting)
+            return false;
+        return true;
     }
-    private void OnFixedUpdate()
+
+    public override bool CheckIsAvailable(ExPlayerControl player)
     {
-        if (suicideTimer > 0 && _suicideTarget != null)
+        return player.IsAlive();
+    }
+
+    public override void OnMeetingStart()
+    {
+        // もし死亡後にアタッチされている場合に備えて
+        if (!anyoneDied && ExPlayerControl.ExPlayerControls.Any(x => x.IsDead()))
+            anyoneDied = true;
+
+        HideButtons = false;
+        if (guesserUI != null)
+            GameObject.Destroy(guesserUI);
+        guesserUI = null;
+        ShotThisMeeting = 0;
+        MeetingCount++;
+
+        // 残り使用回数を表示するテキストを作成
+        if (Player.IsDead()) return;
+        if (limitText != null)
+            GameObject.Destroy(limitText.gameObject);
+        limitText = GameObject.Instantiate(FastDestroyableSingleton<HudManager>.Instance.KillButton.cooldownTimerText, MeetingHud.Instance.transform);
+        limitText.text = ModTranslation.GetString("GuesserLimitText", Count, Math.Min(maxShots, shotsPerMeeting) - ShotThisMeeting);
+        limitText.enableWordWrapping = false;
+        limitText.transform.localScale = Vector3.one * 0.5f;
+        limitText.transform.localPosition = new Vector3(-3.58f, 2.27f, -10);
+        limitText.gameObject.SetActive(true);
+        limitText.alignment = TMPro.TextAlignmentOptions.Left;
+    }
+    public override void OnMeetingUpdate()
+    {
+        if (ExPlayerControl.LocalPlayer.IsDead())
         {
-            suicideTimer -= Time.fixedDeltaTime;
-            if (suicideTimer <= 0 || MeetingHud.Instance != null)
-            {
-                _suicideTarget.CustomDeath(CustomDeathType.Suicide);
-                if (_suicideText != null)
-                {
-                    _suicideText.text = "";
-                    GameObject.Destroy(_suicideText.gameObject);
-                    _suicideText = null;
-                }
-                _suicideTarget = null;
-            }
+            HideButtons = false;
+            if (guesserUI != null)
+                GameObject.Destroy(guesserUI);
+            guesserUI = null;
+
+            // プレイヤーが死亡した場合、テキストも削除
+            if (limitText != null)
+                GameObject.Destroy(limitText.gameObject);
+            limitText = null;
+        }
+        base.OnMeetingUpdate();
+    }
+    private static void SetActiveAllPlayerVoteArea(bool active)
+    {
+        foreach (var playerVoteArea in MeetingHud.Instance.playerStates)
+        {
+            if (playerVoteArea.gameObject.activeSelf != active)
+                playerVoteArea.gameObject.SetActive(active);
         }
     }
-    private void OnWrapUp(WrapUpEventData data)
+    public override void OnClick(ExPlayerControl exPlayer, GameObject button)
     {
-        // 次のラウンドに備えてデバウンスフラグをリセット
-        _isProcessingKill = false;
-
-        if (ModHelpers.Not(data.exiled?.PlayerId == Player.PlayerId && Data.BeCrewOnExile && CurrentTeam == SchrodingersCatTeam.SchrodingersCat))
+        // ミーティングHUDの取得と状態チェック（仮想例）
+        MeetingHud meetingHud = MeetingHud.Instance;
+        if (meetingHud == null) return;
+        if (guesserUI != null || !(meetingHud.state == MeetingHud.VoteStates.Voted ||
+                                    meetingHud.state == MeetingHud.VoteStates.NotVoted ||
+                                    meetingHud.state == MeetingHud.VoteStates.Discussion))
             return;
-        CurrentTeam = SchrodingersCatTeam.Crewmate;
-        Dominate(CurrentTeam);
-    }
-    private void TryMurder(TryKillEventData data)
-    {
-        if (Player.IsLovers()) return;
-        if (data.RefTarget != Player) return;
-        if (data.Killer == Player) return;
-        if (CurrentTeam != SchrodingersCatTeam.SchrodingersCat) return;
 
-        // 連打対策：1回目のキル処理で陣営が変化した後、RPC伝播前に
-        // 2回目のキルが届いた場合でもキルを拒否する。
-        // _isProcessingKill は WrapUp でリセットされる。
-        if (_isProcessingKill)
-        {
-            data.RefSuccess = false;
-            return;
-        }
-        _isProcessingKill = true;
-        bool showKillAnimation = true;
-        if (data.Killer.IsImpostor())
-            CurrentTeam = Data.HasKillAbility ? SchrodingersCatTeam.Impostor : SchrodingersCatTeam.Madmate;
-        else if (data.Killer.IsJackal())
-            CurrentTeam = Data.HasKillAbility ? SchrodingersCatTeam.Jackal : SchrodingersCatTeam.Friends;
-        else if (data.Killer.IsPavlovsTeam())
-            CurrentTeam = Data.HasKillAbility ? SchrodingersCatTeam.Pavlovs : SchrodingersCatTeam.PavlovFriends;
-        else if (data.Killer.IsCrewmate())
-            CurrentTeam = SchrodingersCatTeam.Crewmate;
-        else if (Data.CrewOnKillByNonSpecific)
-        {
-            CurrentTeam = SchrodingersCatTeam.Crewmate;
-            Player.CustomDeath(CustomDeathType.Suicide);
-            showKillAnimation = false;
-        }
+        if (exPlayer.IsDead()) return;
+        if (CannotShootThisMeeting(exPlayer)) return;
 
-        if (CurrentTeam != SchrodingersCatTeam.SchrodingersCat)
+        // UI生成に必要なローカル変数群
+        int Page = 1;
+        int currentTeamType = (int)AssignedTeamType.Crewmate;
+        const int MaxOneScreenRole = 10; // 1画面に表示する役割ボタンの最大数（仮定）
+
+        var roleButtons = new System.Collections.Generic.Dictionary<AssignedTeamType, System.Collections.Generic.List<Transform>>();
+        var roleSelectButtons = new System.Collections.Generic.Dictionary<AssignedTeamType, SpriteRenderer>();
+        var pageButtons = new System.Collections.Generic.List<SpriteRenderer>();
+        System.Collections.Generic.List<Transform> buttons = new();
+        Transform selectedButton = null;
+        System.Collections.Generic.List<int> teamButtonCount = new() { 0, 0, 0 };
+
+        // ミーティングHUD上のプレイヤー状態UIを非表示にする
+        HideButtons = true;
+        SetActiveAllPlayerVoteArea(false);
+
+        // UIコンテナの生成（PhoneUIプレハブを元に）
+        Transform prototype = meetingHud.transform.Find("MeetingContents/PhoneUI");
+        Transform container = UnityEngine.Object.Instantiate(prototype, meetingHud.transform);
+        container.localPosition = new Vector3(0, 0, -200f);
+        guesserUI = container.gameObject;
+
+        // テンプレートの取得
+        var buttonTemplate = meetingHud.playerStates[0].transform.Find("votePlayerBase");
+        var maskTemplate = meetingHud.playerStates[0].transform.Find("MaskArea");
+        var smallButtonTemplate = meetingHud.playerStates[0].Buttons.transform.Find("CancelButton");
+        var textTemplate = meetingHud.playerStates[0].NameText;
+
+        // --- Exitボタンの生成 ---
+        Transform exitButtonParent = new GameObject().transform;
+        exitButtonParent.SetParent(container);
+        Transform exitButton = UnityEngine.Object.Instantiate(buttonTemplate, exitButtonParent);
+        exitButton.Find("ControllerHighlight").gameObject.SetActive(false);
+        Transform exitButtonMask = UnityEngine.Object.Instantiate(maskTemplate, exitButtonParent);
+        exitButton.gameObject.GetComponent<SpriteRenderer>().sprite = smallButtonTemplate.GetComponent<SpriteRenderer>().sprite;
+        exitButtonParent.localPosition = new Vector3(2.725f, 2.1f, -200f);
+        exitButtonParent.localScale = new Vector3(0.25f, 0.9f, 1f);
+        exitButtonParent.SetAsFirstSibling();
+        var exitPassive = exitButton.GetComponent<PassiveButton>();
+        exitPassive.OnClick = new();
+        exitPassive.ClickSound = null;
+        exitPassive.OnClick.AddListener((UnityAction)(() =>
         {
-            Dominate(CurrentTeam);
-            if (Data.KillVictimSuicide && Data.HasKillAbility)
-            {
-                suicideTimer = Data.SuicideTime;
-                _suicideTarget = data.Killer;
-                if (_suicideTarget.AmOwner)
-                {
-                    _suicideText = GameObject.Instantiate(HudManager.Instance.roomTracker.text, HudManager.Instance.roomTracker.transform);
-                    _suicideText.transform.localPosition = HudManager.Instance.roomTracker.transform.localPosition + new Vector3(0, 0.4f, 0f);
-                    _suicideText.alignment = TextAlignmentOptions.Center;
-                    _suicideText.color = SchrodingersCat.Instance.RoleColor;
-                    _suicideText.text = ModTranslation.GetString("SchrodingersCatSuicideText");
-                }
-            }
-            if (data.RefTarget.AmOwner)
-                NameText.UpdateAllNameInfo();
+            HideButtons = false;
+            SetActiveAllPlayerVoteArea(true);
+            UnityEngine.Object.Destroy(container.gameObject);
+        }));
+        var ExitButton = exitPassive;
+
+        // --- チーム選択ボタンの生成 ---
+        for (int index = 0; index < 3; index++)
+        {
+            Transform teamButtonParent = new GameObject().transform;
+            teamButtonParent.SetParent(container);
+            Transform teamButton = UnityEngine.Object.Instantiate(buttonTemplate, teamButtonParent);
+            teamButton.Find("ControllerHighlight").gameObject.SetActive(false);
+            Transform teamButtonMask = UnityEngine.Object.Instantiate(maskTemplate, teamButtonParent);
+            var teamLabel = UnityEngine.Object.Instantiate(textTemplate, teamButton);
+            roleSelectButtons.Add((AssignedTeamType)index, teamButton.GetComponent<SpriteRenderer>());
+            teamButtonParent.localPosition = new Vector3(-2.75f + (index * 1.75f), 2.225f, -200);
+            teamButtonParent.localScale = new Vector3(0.55f, 0.55f, 1f);
+            // チームに応じたラベル色の設定
+            if ((AssignedTeamType)index == AssignedTeamType.Crewmate)
+                teamLabel.color = Color.white;
+            else if ((AssignedTeamType)index == AssignedTeamType.Impostor)
+                teamLabel.color = Palette.ImpostorRed;
             else
-                NameText.UpdateNameInfo(data.RefTarget);
-            data.RefSuccess = false;
-            if (showKillAnimation && data.RefTarget.AmOwner)
-                DestroyableSingleton<HudManager>.Instance.KillOverlay.ShowKillAnimation(data.Killer.Data, data.RefTarget.Data);
+                teamLabel.color = new Color32(127, 127, 127, 255);
+            Logger.Info(teamLabel.color.ToString(), ((AssignedTeamType)index).ToString());
+            string key = ((AssignedTeamType)index).ToString();
+            teamLabel.text = ModTranslation.GetString(key);
+            teamLabel.alignment = TMPro.TextAlignmentOptions.Center;
+            teamLabel.transform.localPosition = new Vector3(0, 0, teamLabel.transform.localPosition.z);
+            teamLabel.transform.localScale *= 1.6f;
+            teamLabel.autoSizeTextContainer = true;
+
+            // チームボタンタップ時の処理
+            void CreateTeamButton(Transform tb, AssignedTeamType type)
+            {
+                var passiveButton = tb.GetComponent<PassiveButton>();
+                passiveButton.OnClick = new();
+                passiveButton.ClickSound = null;
+                passiveButton.OnClick.AddListener((UnityAction)(() =>
+                {
+                    guesserSelectRole(type);
+                    ReloadPage();
+                }));
+            }
+            if (ExPlayerControl.LocalPlayer.IsAlive())
+                CreateTeamButton(teamButton, (AssignedTeamType)index);
         }
-    }
-    /// <summary>
-    /// playerが現在のチームに所属しているかどうかを返す
-    /// </summary>
-    /// <param name="player"></param>
-    /// <returns></returns>
-    private bool CheckTeam(ExPlayerControl player)
-    {
-        switch (CurrentTeam)
+
+        // --- ローカル関数: guesserSelectRole ---
+        void guesserSelectRole(AssignedTeamType team, bool resetSelection = true)
         {
-            case SchrodingersCatTeam.SchrodingersCat:
-                return false;
-            case SchrodingersCatTeam.Crewmate:
-                return player.IsCrewmate();
-            case SchrodingersCatTeam.Impostor:
-            case SchrodingersCatTeam.Madmate:
-                return player.IsImpostor();
-            case SchrodingersCatTeam.Jackal:
-            case SchrodingersCatTeam.Friends:
-                return player.IsJackal();
-            case SchrodingersCatTeam.Pavlovs:
-            case SchrodingersCatTeam.PavlovFriends:
-                return player.IsPavlovsTeam();
-            default:
-                return false;
+            currentTeamType = (int)team;
+            if (resetSelection) Page = 1;
+            foreach (var RoleButton in roleButtons)
+            {
+                int index = 0;
+                foreach (var RoleBtn in RoleButton.Value)
+                {
+                    if (RoleBtn == null) continue;
+                    index++;
+                    if (index <= (Page - 1) * 40) { RoleBtn.gameObject.SetActive(false); continue; }
+                    if ((Page * 40) < index) { RoleBtn.gameObject.SetActive(false); continue; }
+                    RoleBtn.gameObject.SetActive(RoleButton.Key == team);
+                }
+            }
+            foreach (var RoleButton in roleSelectButtons)
+            {
+                if (RoleButton.Value == null) continue;
+                RoleButton.Value.color = new(0, 0, 0, RoleButton.Key == team ? 1 : 0.25f);
+            }
         }
-    }
-    private void OnNameTextUpdate(NameTextUpdateEventData data)
-    {
-        if (CurrentTeam == SchrodingersCatTeam.SchrodingersCat) return;
-        if (data.Player != Player)
+
+        // --- ローカル関数: ReloadPage ---
+        void ReloadPage()
         {
-            if (Player.AmOwner)
-                NameUpdateOwner(data);
+            pageButtons[0].color = new Color(1, 1, 1, 1f);
+            pageButtons[1].color = new Color(1, 1, 1, 1f);
+            int totalPages = roleButtons.ContainsKey((AssignedTeamType)currentTeamType) ?
+                (roleButtons[(AssignedTeamType)currentTeamType].Count / MaxOneScreenRole +
+                 (roleButtons[(AssignedTeamType)currentTeamType].Count % MaxOneScreenRole != 0 ? 1 : 0)) : 0;
+            if (totalPages < Page)
+            {
+                Page -= 1;
+                pageButtons[1].color = new Color(1, 1, 1, 0.1f);
+            }
+            else if (totalPages < Page + 1)
+            {
+                pageButtons[1].color = new Color(1, 1, 1, 0.1f);
+            }
+            if (Page <= 1)
+            {
+                Page = 1;
+                pageButtons[0].color = new Color(1, 1, 1, 0.1f);
+            }
+            guesserSelectRole((AssignedTeamType)currentTeamType, false);
+            Logger.Info("Page:" + Page);
+        }
+
+        // --- ローカル関数: CreatePage ---
+        void CreatePage(bool isNext, MeetingHud hud, Transform cont)
+        {
+            var btnTemplate = hud.playerStates[0].transform.Find("votePlayerBase");
+            var maskTemplateLocal = hud.playerStates[0].transform.Find("MaskArea");
+            var smallBtnTemplate = hud.playerStates[0].Buttons.transform.Find("CancelButton");
+            var textTemplateLocal = hud.playerStates[0].NameText;
+            Transform pageButtonParent = new GameObject().transform;
+            pageButtonParent.SetParent(cont);
+            Transform pageButton = UnityEngine.Object.Instantiate(btnTemplate, pageButtonParent);
+            pageButton.Find("ControllerHighlight").gameObject.SetActive(false);
+            Transform pageButtonMask = UnityEngine.Object.Instantiate(maskTemplateLocal, pageButtonParent);
+            var pageLabel = UnityEngine.Object.Instantiate(textTemplateLocal, pageButton);
+            pageButtonParent.localPosition = isNext ? new Vector3(3.535f, -2.2f, -200) : new Vector3(-3.475f, -2.2f, -200);
+            pageButtonParent.localScale = new Vector3(0.55f, 0.55f, 1f);
+            pageLabel.color = Color.white;
+            pageLabel.text = ModTranslation.GetString(isNext ? "NextPage" : "PreviousPage");
+            pageLabel.alignment = TMPro.TextAlignmentOptions.Center;
+            pageLabel.transform.localPosition = new Vector3(0, 0, pageLabel.transform.localPosition.z);
+            pageLabel.transform.localScale *= 1.6f;
+            pageLabel.autoSizeTextContainer = true;
+            if (!isNext && Page <= 1)
+                pageButton.GetComponent<SpriteRenderer>().color = new Color(1, 1, 1, 0.1f);
+            var pagePassive = pageButton.GetComponent<PassiveButton>();
+            pagePassive.OnClick = new();
+            pagePassive.ClickSound = null;
+            pagePassive.OnClick.AddListener((UnityAction)(() =>
+            {
+                int totalPages = roleButtons.ContainsKey((AssignedTeamType)currentTeamType) ?
+                    (roleButtons[(AssignedTeamType)currentTeamType].Count / MaxOneScreenRole +
+                     (roleButtons[(AssignedTeamType)currentTeamType].Count % MaxOneScreenRole != 0 ? 1 : 0)) : 0;
+                // ページを移動できるか判定
+                if (isNext && Page >= totalPages) return;
+                else if (!isNext && Page <= 1) return;
+                Logger.Info("クリック");
+                if (isNext)
+                    Page += 1;
+                else
+                    Page -= 1;
+                ReloadPage();
+            }));
+            pageButtons.Add(pageButton.GetComponent<SpriteRenderer>());
+        }
+
+        if (ExPlayerControl.LocalPlayer.IsAlive())
+        {
+            CreatePage(false, meetingHud, container);
+            CreatePage(true, meetingHud, container);
+        }
+
+        int ind = 0;
+
+        // --- ローカル関数: CreateRole ---
+        void CreateRole(IRoleBase rolebase)
+        {
+            if (rolebase == null)
+                throw new Exception("rolebaseがnullです");
+            AssignedTeamType team = rolebase.AssignedTeam;
+            if (teamButtonCount[(int)team] >= 40)
+                teamButtonCount[(int)team] = 0;
+            Transform buttonParent = new GameObject().transform;
+            buttonParent.SetParent(container);
+            Transform button = UnityEngine.Object.Instantiate(buttonTemplate, buttonParent);
+            button.Find("ControllerHighlight").gameObject.SetActive(false);
+            Transform buttonMask = UnityEngine.Object.Instantiate(maskTemplate, buttonParent);
+            var label = UnityEngine.Object.Instantiate(textTemplate, button);
+            if (!roleButtons.ContainsKey(team))
+            {
+                roleButtons.Add(team, new System.Collections.Generic.List<Transform>());
+            }
+            roleButtons[team].Add(button);
+            buttons.Add(button);
+            int row = teamButtonCount[(int)team] / 5;
+            int col = teamButtonCount[(int)team] % 5;
+            buttonParent.localPosition = new Vector3(-3.47f + 1.75f * col, 1.5f - 0.45f * row, -200f);
+            buttonParent.localScale = new Vector3(0.55f, 0.55f, 1f);
+            label.text = ModHelpers.Cs(rolebase.RoleColor, ModTranslation.GetString(rolebase.Role.ToString()));
+            label.alignment = TMPro.TextAlignmentOptions.Center;
+            label.transform.localPosition = new Vector3(0, 0, label.transform.localPosition.z);
+            label.transform.localScale *= 1.6f;
+            label.autoSizeTextContainer = true;
+            PassiveButton passiveButton = button.GetComponent<PassiveButton>();
+            passiveButton.OnClick = new();
+            passiveButton.ClickSound = null;
+            if (ExPlayerControl.LocalPlayer.IsAlive())
+            {
+                passiveButton.OnClick.AddListener((UnityAction)(() =>
+                {
+                    Logger.Info("ボタンクリック!!!!!!!!!!!!!!!");
+                    if (selectedButton != button)
+                    {
+                        selectedButton = button;
+                        buttons.ForEach(x => x.GetComponent<SpriteRenderer>().color = (x == selectedButton) ? Color.red : Color.white);
+                    }
+                    else
+                    {
+                        if (!(meetingHud.state == MeetingHud.VoteStates.Voted ||
+                              meetingHud.state == MeetingHud.VoteStates.NotVoted ||
+                              meetingHud.state == MeetingHud.VoteStates.Discussion) || exPlayer == null)
+                            return;
+                        this.UseAbilityCount();
+                        this.ShotThisMeeting++;
+
+                        // 残り使用回数を更新
+                        if (limitText != null)
+                            limitText.text = ModTranslation.GetString("GuesserLimitText", Count, Math.Min(maxShots, shotsPerMeeting) - ShotThisMeeting);
+
+                        var targetRole = exPlayer.Role;
+                        ExPlayerControl dyingTarget = (targetRole == rolebase.Role) ? exPlayer : PlayerControl.LocalPlayer;
+                        if (madmateSuicide && (ExPlayerControl.LocalPlayer.IsMadRoles() || ExPlayerControl.LocalPlayer.IsFriendRoles()))
+                        {
+                            dyingTarget = ExPlayerControl.LocalPlayer;
+                        }
+
+                        // isMisFire: 推測外れによるゲッサー自身の自爆（ナイスゲッサー誤射）。
+                        // 従来は「LocalPlayer == exPlayer（自分自身を推測した）」を isMisFire としていたが、
+                        // 正しくは「dyingTarget がゲッサー自身かつ madmateSuicide ではない」場合。
+                        // madmateSuicide の場合は isSuicide 扱いになるため除外する。
+                        bool isSuicide = madmateSuicide && (dyingTarget.IsMadRoles() || dyingTarget.IsFriendRoles());
+                        bool isMisFire = dyingTarget == ExPlayerControl.LocalPlayer && !isSuicide;
+                        RpcShotGuesser(PlayerControl.LocalPlayer, dyingTarget, isSuicide, isMisFire);
+                        HideButtons = false;
+                        SetActiveAllPlayerVoteArea(true);
+                        UnityEngine.Object.Destroy(container.gameObject);
+
+                    }
+                }));
+            }
+            teamButtonCount[(int)team]++;
+            ind++;
+        }
+
+        List<RoleId> GeneratedButtons = new();
+        // --- 役割ボタンの生成（IntroData／RoleInfo から） ---
+        foreach (IRoleBase roleBase in CustomRoleManager.AllRoles)
+        {
+            if (!IsValidRole(roleBase)) continue;
+
+            CreateRoleAndRelated(roleBase, ref GeneratedButtons);
+        }
+
+        foreach (IGhostRoleBase roleBase in CustomRoleManager.AllGhostRoles)
+        {
+            if (!IsValidGhostRole(roleBase)) continue;
+
+            RelatedGhostRole(roleBase, ref GeneratedButtons);
+        }
+
+        foreach (IModifierBase roleBase in CustomRoleManager.AllModifiers)
+        {
+            if (!IsValidModifierRole(roleBase)) continue;
+
+            RelatedModifierRole(roleBase, ref GeneratedButtons);
+        }
+
+        void CreateRoleAndRelated(IRoleBase role, ref List<RoleId> generated)
+        {
+            if (generated.Contains(role.Role)) return;
+
+            CreateRole(role);
+            generated.Add(role.Role);
+
+            if (role.RelatedRoleIds == null) return;
+
+            foreach (var relatedId in role.RelatedRoleIds)
+            {
+                if (generated.Contains(relatedId)) continue;
+
+                var relatedRole = CustomRoleManager.GetRoleById(relatedId);
+                if (relatedRole == null) continue;
+
+                CreateRoleAndRelated(relatedRole, ref generated);
+            }
+        }
+
+        void RelatedGhostRole(IGhostRoleBase role, ref List<RoleId> generated)
+        {
+            if (role.RelatedRoleIds == null) return;
+
+            foreach (var relatedId in role.RelatedRoleIds)
+            {
+                if (generated.Contains(relatedId)) continue;
+
+                var relatedRole = CustomRoleManager.GetRoleById(relatedId);
+                if (relatedRole == null) continue;
+
+                CreateRoleAndRelated(relatedRole, ref generated);
+            }
+        }
+
+        void RelatedModifierRole(IModifierBase role, ref List<RoleId> generated)
+        {
+            if (role.RelatedRoleIds == null) return;
+
+            foreach (var relatedId in role.RelatedRoleIds)
+            {
+                if (generated.Contains(relatedId)) continue;
+
+                var relatedRole = CustomRoleManager.GetRoleById(relatedId);
+                if (relatedRole == null) continue;
+
+                CreateRoleAndRelated(relatedRole, ref generated);
+            }
+        }
+
+        bool IsValidGhostRole(IGhostRoleBase role)
+        {
+            if (role == null) return false;
+            if (RoleOptionManager.TryGetGhostRoleOption(role.Role, out var option)) return false;
+            if (option.NumberOfCrews == 0 || option.Percentage == 0) return false;
+            return true;
+        }
+
+        bool IsValidModifierRole(IModifierBase role)
+        {
+            if (role == null) return false;
+            if (!RoleOptionManager.TryGetModifierRoleOption(role.ModifierRole, out var option)) return false;
+            if (!role.UseTeamSpecificAssignment && (option.NumberOfCrews == 0 || option.Percentage == 0)) return false;
+            if (role.UseTeamSpecificAssignment && (
+                (role.CrewmateChance == 0 || option.NumberOfCrews == 0) &&
+                (role.ImpostorChance == 0 || option.MaxImpostors == 0) &&
+                (role.NeutralChance == 0 || option.MaxNeutrals == 0))
+                ) return false;
+            return true;
+        }
+
+        bool IsValidRole(IRoleBase role)
+        {
+            if (role == null)
+            {
+                Logger.Info("continueになりました:" + role.Role, "Guesser");
+                return false;
+            }
+            if (role.Role == RoleId.Crewmate && !cannotShootCrewmate)
+                return true;
+            else if (role.Role == RoleId.Impostor)
+                return true;
+            else if (role.Role == RoleId.Celebrity && cannotShootCelebrity)
+            {
+                // スターを撃てない設定がONで、撃てないターンを制限する設定がONの場合、
+                // 指定されたターン数以降はスターを撃てるようにする
+                if (!CelebrityLimitedTurns || MeetingCount < CelebrityLimitedTurnsCount)
+                    return false;
+            }
+
+            if (!RoleOptionManager.TryGetRoleOption(role.Role, out var option) || option.NumberOfCrews == 0 || option.Percentage == 0)
+            {
+                Logger.Info("continueになりました:" + role.Role, "Guesser");
+                return false;
+            }
+
+            return true;
+        }
+        container.localScale *= 0.75f;
+        guesserSelectRole(AssignedTeamType.Crewmate);
+        ReloadPage();
+    }
+    private bool CannotShootThisMeeting(ExPlayerControl player = null)
+    {
+        if (cannotShootFirstTurn && MeetingCount <= 0)
+            return true;
+        if (cannotShootNoDead && !anyoneDied)
+            return true;
+        if (player != null && cannotShootCelebrity && player.Role == RoleId.Celebrity)
+        {
+            // スターを撃てない設定がONで、撃てないターンを制限する設定がOFFなら常に拒否
+            if (!CelebrityLimitedTurns)
+                return true;
+            // スターを撃てない設定がONで、撃てないターンを制限する設定がONの場合、指定されたターン数まではスターを撃てないようにする
+            else if (MeetingCount < CelebrityLimitedTurnsCount)
+                return true;
+        }
+        return false;
+    }
+
+    [CustomRPC]
+    public static void RpcShotGuesser(PlayerControl killer, ExPlayerControl dyingTarget, bool isSuicide, bool isMisFire)
+    {
+        if (killer == null || dyingTarget == null)
             return;
-        }
-        if (CurrentTeam == SchrodingersCatTeam.Crewmate)
-        {
-            if (!data.Visible)
-                return;
-        }
-        else if (ModHelpers.Not(data.Visible || Player.AmOwner || CheckTeam(ExPlayerControl.LocalPlayer))) return;
+        if (dyingTarget == null) return;
+        dyingTarget.Player.Exiled();
 
-        Color32 color = Color.white;
-        switch (CurrentTeam)
+        if (isMisFire || isSuicide)
+            dyingTarget.FinalStatus = FinalStatus.GuesserMisFire;
+        else
         {
-            case SchrodingersCatTeam.Impostor:
-            case SchrodingersCatTeam.Madmate:
-                color = Palette.ImpostorRed;
-                break;
-            case SchrodingersCatTeam.Jackal:
-            case SchrodingersCatTeam.Friends:
-                color = Jackal.Instance.RoleColor;
-                break;
-            case SchrodingersCatTeam.Crewmate:
-                color = Palette.CrewmateBlue;
-                break;
-            case SchrodingersCatTeam.Pavlovs:
-            case SchrodingersCatTeam.PavlovFriends:
-                color = PavlovsDog.Instance.RoleColor;
-                break;
-            default:
-                return;
+            dyingTarget.FinalStatus = FinalStatus.GuesserKill;
+            MurderDataManager.AddMurderData(killer, dyingTarget);
         }
-        data.Player.PlayerInfoText.text = ModHelpers.Cs(color, data.Player.PlayerInfoText.text);
-        data.Player.PlayerInfoText.color = color;
-        if (data.Player.MeetingInfoText)
-        {
-            data.Player.MeetingInfoText.text = ModHelpers.Cs(color, data.Player.MeetingInfoText.text);
-            data.Player.MeetingInfoText.color = color;
-        }
-        data.Player.cosmetics.nameText.text = ModHelpers.Cs(color, data.Player.cosmetics.nameText.text);
-        if (data.Player.VoteArea != null)
-            data.Player.VoteArea.NameText.text = ModHelpers.Cs(color, data.Player.VoteArea.NameText.text);
-    }
-    private void NameUpdateOwner(NameTextUpdateEventData data)
-    {
-        switch (CurrentTeam)
-        {
-            case SchrodingersCatTeam.Crewmate:
-                break;
-            case SchrodingersCatTeam.Impostor:
-            case SchrodingersCatTeam.Madmate:
-                if (data.Player.IsImpostor())
-                    data.Player.PlayerInfoText.text = ModHelpers.Cs(Palette.ImpostorRed, data.Player.PlayerInfoText.text);
-                break;
-            case SchrodingersCatTeam.Jackal:
-            case SchrodingersCatTeam.Friends:
-                if (data.Player.IsJackal())
-                    data.Player.PlayerInfoText.text = ModHelpers.Cs(Jackal.Instance.RoleColor, data.Player.PlayerInfoText.text);
-                break;
-            case SchrodingersCatTeam.Pavlovs:
-            case SchrodingersCatTeam.PavlovFriends:
-                if (data.Player.IsPavlovsTeam())
-                    data.Player.PlayerInfoText.text = ModHelpers.Cs(PavlovsOwner.Instance.RoleColor, data.Player.PlayerInfoText.text);
-                break;
-        }
-    }
-    private bool CheckTargetable(ExPlayerControl player)
-    {
-        switch (CurrentTeam)
-        {
-            case SchrodingersCatTeam.SchrodingersCat:
-                return false;
-            case SchrodingersCatTeam.Crewmate:
-                return player.IsAlive();
-            case SchrodingersCatTeam.Impostor:
-                return player.IsAlive() && !player.IsImpostor();
-            case SchrodingersCatTeam.Jackal:
-                return player.IsAlive() && !player.IsJackal();
-            case SchrodingersCatTeam.Pavlovs:
-                return player.IsAlive() && !player.IsPavlovsTeam();
-            default:
-                return false;
-        }
-    }
-    private bool CouldUseVent()
-    {
-        switch (CurrentTeam)
-        {
-            case SchrodingersCatTeam.SchrodingersCat:
-                return false;
-            case SchrodingersCatTeam.Crewmate:
-                return false;
-            case SchrodingersCatTeam.Madmate:
-                return Madmate.MadmateCouldUseVent;
-            case SchrodingersCatTeam.Impostor:
-                return true;
-            case SchrodingersCatTeam.Friends:
-                return JackalFriends.JackalFriendsCanUseVent;
-            case SchrodingersCatTeam.Jackal:
-                return Jackal.JackalCanUseVent;
-            case SchrodingersCatTeam.PavlovFriends:
-                return PavlovsOwner.PavlovsDogCanUseVent;
-            case SchrodingersCatTeam.Pavlovs:
-                return PavlovsOwner.PavlovsDogCanUseVent;
-            default:
-                return false;
-        }
-    }
-    public void Dominate(SchrodingersCatTeam team)
-    {
-        if (Data.HasKillAbility && CurrentTeam != SchrodingersCatTeam.SchrodingersCat && CurrentTeam != SchrodingersCatTeam.Crewmate)
-        {
-            _customKillButtonAbility = new CustomKillButtonAbility(
-                () => Data.HasKillAbility && CurrentTeam is not SchrodingersCatTeam.SchrodingersCat and not SchrodingersCatTeam.Crewmate,
-                () => Data.KillCooldown,
-                () => false,
-                isTargetable: (player) => player.IsAlive() && CheckTargetable(player)
-            );
-            Player.AttachAbility(_customKillButtonAbility, new AbilityParentAbility(this));
-        }
-        switch (team)
-        {
-            case SchrodingersCatTeam.Madmate:
-                Player.DetachAbility(_knowOtherAbility.AbilityId);
-                Player.DetachAbility(_customVentAbility.AbilityId);
-                Player.DetachAbility(_customSaboAbility.AbilityId);
-                Player.DetachAbility(_impostorVisionAbility.AbilityId);
-                MadmateAbility madmateAbility = new(new MadmateData(
-                    hasImpostorVision: Madmate.MadmateHasImpostorVision,
-                    couldUseVent: Madmate.MadmateCouldUseVent,
-                    couldKnowImpostors: Madmate.MadmateCanKnowImpostors,
-                    taskNeeded: Madmate.MadmateNeededTaskCount,
-                    specialTasks: Madmate.MadmateSpecialTasks
-                ));
-                Player.AttachAbility(madmateAbility, new AbilityParentAbility(this));
-                if (Player.AmOwner)
-                    madmateAbility.CustomTaskAbility.AssignTasks();
-                break;
-            case SchrodingersCatTeam.Friends:
-                Player.DetachAbility(_knowOtherAbility.AbilityId);
-                Player.DetachAbility(_customVentAbility.AbilityId);
-                Player.DetachAbility(_customSaboAbility.AbilityId);
-                Player.DetachAbility(_impostorVisionAbility.AbilityId);
-                JFriendAbility jackalFriendsAbility = new(new JFriendData(
-                    CanUseVent: JackalFriends.JackalFriendsCanUseVent,
-                    IsImpostorVision: JackalFriends.JackalFriendsImpostorVision,
-                    CouldKnowJackals: JackalFriends.JackalFriendsCouldKnowJackals,
-                    TaskNeeded: JackalFriends.JackalFriendsTaskNeed,
-                    SpecialTasks: JackalFriends.JackalFriendsTaskOption
-                ));
-                Player.AttachAbility(jackalFriendsAbility, new AbilityParentAbility(this));
-                if (Player.AmOwner)
-                    jackalFriendsAbility.CustomTaskAbility.AssignTasks();
-                break;
-        }
-    }
-    private bool CouldUseSabo()
-    {
-        switch (CurrentTeam)
-        {
-            case SchrodingersCatTeam.SchrodingersCat:
-                return false;
-            case SchrodingersCatTeam.Crewmate:
-                return false;
-            case SchrodingersCatTeam.Madmate:
-                return false;
-            case SchrodingersCatTeam.Impostor:
-                return true;
-            case SchrodingersCatTeam.Friends:
-                return false;
-            case SchrodingersCatTeam.Jackal:
-                return false;
-            case SchrodingersCatTeam.PavlovFriends:
-                return false;
-            case SchrodingersCatTeam.Pavlovs:
-                return false;
-            default:
-                return false;
-        }
-    }
-    private bool IsImpostorVision()
-    {
-        switch (CurrentTeam)
-        {
-            case SchrodingersCatTeam.SchrodingersCat:
-                return false;
-            case SchrodingersCatTeam.Crewmate:
-                return false;
-            case SchrodingersCatTeam.Madmate:
-                return Madmate.MadmateHasImpostorVision;
-            case SchrodingersCatTeam.Impostor:
-                return true;
-            case SchrodingersCatTeam.Friends:
-                return JackalFriends.JackalFriendsImpostorVision;
-            case SchrodingersCatTeam.Jackal:
-                return Jackal.JackalImpostorVision;
-            case SchrodingersCatTeam.PavlovFriends:
-                return PavlovsOwner.PavlovsDogIsImpostorVision;
-            case SchrodingersCatTeam.Pavlovs:
-                return PavlovsOwner.PavlovsDogIsImpostorVision;
-            default:
-                return false;
-        }
-    }
+        if (Constants.ShouldPlaySfx()) SoundManager.Instance.PlaySound(dyingTarget.Player.KillSfx, false, 0.8f);
 
-    private bool CanKnow(ExPlayerControl player)
-    {
-        switch (CurrentTeam)
+        // GuesserShotEventを発行
+        Events.GuesserShotEvent.Invoke(killer, dyingTarget.Player, isMisFire || isSuicide);
+
+        if (MeetingHud.Instance)
         {
-            case SchrodingersCatTeam.SchrodingersCat:
-            case SchrodingersCatTeam.Crewmate:
-                return false;
-            case SchrodingersCatTeam.Impostor:
-                return player.IsImpostor();
-            case SchrodingersCatTeam.Jackal:
-                return player.IsJackal();
-            case SchrodingersCatTeam.Pavlovs:
-                return player.IsPavlovsTeam();
-            default:
-                return false;
+            foreach (PlayerVoteArea pva in MeetingHud.Instance.playerStates)
+            {
+                if (pva.TargetPlayerId == dyingTarget.PlayerId)
+                {
+                    pva.SetDead(pva.DidReport, true);
+                    pva.Overlay.gameObject.SetActive(true);
+                }
+                pva.UnsetVote();
+            }
+            MeetingHud.Instance.ClearVote();
+            if (AmongUsClient.Instance.AmHost)
+                MeetingHud.Instance.CheckForEndVoting();
+        }
+        if (FastDestroyableSingleton<HudManager>.Instance != null && killer != null)
+        {
+            if (PlayerControl.LocalPlayer == dyingTarget)
+            {
+                FastDestroyableSingleton<HudManager>.Instance.KillOverlay.ShowKillAnimation(killer.Data, dyingTarget.Data);
+            }
         }
     }
 }
