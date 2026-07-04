@@ -48,6 +48,11 @@ public class SchrodingersCatAbility : AbilityBase
     private TextMeshPro _suicideText;
 
     public SchrodingersCatTeam CurrentTeam { get; private set; } = SchrodingersCatTeam.SchrodingersCat;
+
+    // 連打対策：陣営変化の RPC が全クライアントに伝播する前に
+    // 2回目のキルが処理されないようにするデバウンスフラグ
+    private bool _isProcessingKill = false;
+
     public SchrodingersCatAbility(SchrodingersCatData data)
     {
         Data = data;
@@ -106,6 +111,9 @@ public class SchrodingersCatAbility : AbilityBase
     }
     private void OnWrapUp(WrapUpEventData data)
     {
+        // 次のラウンドに備えてデバウンスフラグをリセット
+        _isProcessingKill = false;
+
         if (ModHelpers.Not(data.exiled?.PlayerId == Player.PlayerId && Data.BeCrewOnExile && CurrentTeam == SchrodingersCatTeam.SchrodingersCat))
             return;
         CurrentTeam = SchrodingersCatTeam.Crewmate;
@@ -117,6 +125,16 @@ public class SchrodingersCatAbility : AbilityBase
         if (data.RefTarget != Player) return;
         if (data.Killer == Player) return;
         if (CurrentTeam != SchrodingersCatTeam.SchrodingersCat) return;
+
+        // 連打対策：1回目のキル処理で陣営が変化した後、RPC伝播前に
+        // 2回目のキルが届いた場合でもキルを拒否する。
+        // _isProcessingKill は WrapUp でリセットされる。
+        if (_isProcessingKill)
+        {
+            data.RefSuccess = false;
+            return;
+        }
+        _isProcessingKill = true;
         bool showKillAnimation = true;
         if (data.Killer.IsImpostor())
             CurrentTeam = Data.HasKillAbility ? SchrodingersCatTeam.Impostor : SchrodingersCatTeam.Madmate;
