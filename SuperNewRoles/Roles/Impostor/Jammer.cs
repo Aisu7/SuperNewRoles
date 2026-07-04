@@ -240,4 +240,16 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
             ModHelpers.SetOpacity(__instance, opacity);
         }
     }
+
+    // ゲーム開始時に静的辞書をリセットする。
+    // static フィールドはゲームをまたいで持続するため、前のセッションの
+    // エントリが次のゲームで同じ PlayerId の別プレイヤーに誤適用されるのを防ぐ。
+    [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.CoStartGame))]
+    public static class JammerCoStartGamePatch
+    {
+        public static void Postfix()
+        {
+            _jammedTargets.Clear();
+        }
+    }
 }
