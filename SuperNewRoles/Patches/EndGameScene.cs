@@ -770,11 +770,11 @@ public static class OnGameEndPatch
     {
         if (gameOverReason == GameOverReason.ImpostorsBySabotage && !player.IsDead && !player.Role.IsImpostor)
         {
-            player.IsDead = true;
             if (exPlayer.IsAlive())
             {
                 exPlayer.FinalStatus = FinalStatus.Sabotage;
             }
+            player.IsDead = true;
         }
     }
 }
