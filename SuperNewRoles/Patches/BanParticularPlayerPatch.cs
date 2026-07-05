@@ -1,9 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
 using InnerNet;
 using SuperNewRoles.Modules;
 using SuperNewRoles.CustomOptions.Categories;
+using UnityEngine;
 
 namespace SuperNewRoles.Patches;
 
@@ -16,6 +19,7 @@ public static class PlayerKickHelper
 
     private static bool IsAndroidPlatform(Platforms platform) =>
         platform == Platforms.Android ||
+        (int)platform == 112 || // Starlight（Android版AmongUsランチャー）が送るプラットフォーム値
         platform.ToString().IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0;
 
     private static bool IsUnclassifiedPlatform(Platforms platform)
@@ -34,10 +38,23 @@ public static class PlayerKickHelper
 
     public static bool KickPlayerIfNeeded(ClientData client, bool kickPC, bool kickAndroid, bool kickOther)
     {
-        if (client == null || client.PlatformData == null) return false;
+        if (client == null) return false;
         if (AmongUsClient.Instance.ClientId == client.Id) return false;
 
+        // PlatformData が null かどうかも含めてログに記録する
+        // Starlight など特殊な環境では PlatformData 自体が null で届く場合がある
+        if (client.PlatformData == null)
+        {
+            SuperNewRoles.Logger.Info($"プレイヤー {client.PlayerName} のPlatformData: null（プラットフォーム判定不可）");
+            return false;
+        }
+
         var pf = client.PlatformData.Platform;
+
+        // プラットフォーム値をログに出力する
+        // Starlight など未知のプラットフォームが何の値を送ってくるかを把握するために使用する
+        // ログを見てAndroidと判定されるべき値が抜けていたらコードに追加する
+        SuperNewRoles.Logger.Info($"プレイヤー {client.PlayerName} のプラットフォーム: {pf} (数値: {(int)pf})");
 
         if (kickPC && IsPcPlatform(pf))
         {
@@ -72,6 +89,11 @@ class BanParticularPlayerPatch
         SuperNewRoles.Logger.Info($"{client.PlayerName}(ClientID:{client.Id})が参加");
 
         if (!AmongUsClient.Instance.AmHost)
+            return;
+
+        // LocalPlayer が null の間はロビーがまだ初期化されていない
+        // （「ホストを待っています」表示中など）この段階でのキック・BANは誤動作の原因になる
+        if (PlayerControl.LocalPlayer == null)
             return;
 
         // 自分自身（ホスト）は処理しない
