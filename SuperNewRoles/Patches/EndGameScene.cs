@@ -770,6 +770,7 @@ public static class OnGameEndPatch
     {
         if (gameOverReason == GameOverReason.ImpostorsBySabotage && !player.IsDead && !player.Role.IsImpostor)
         {
+            //もともとサボタージュ勝利時、プレイヤーを死亡させてから生存者の死因をサボタージュとしていたので、コードの順番を入れ替えた。
             if (exPlayer.IsAlive())
             {
                 exPlayer.FinalStatus = FinalStatus.Sabotage;
