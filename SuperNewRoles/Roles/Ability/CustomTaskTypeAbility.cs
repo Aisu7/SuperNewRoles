@@ -75,15 +75,23 @@ public static class CustomTaskTypePatches
 
         static void Prefix(Console __instance)
         {
+            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
+            HandlePrefix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
+        }
+
+        static void Postfix(Console __instance)
+        {
+            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
+            HandlePostfix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
+        }
+
+        internal static void HandlePrefix(PlayerTask task, bool canUse)
+        {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
             if (customTaskTypeAbility == null) return;
-
             if (!customTaskTypeAbility.ShouldChangeTask()) return;
-
-            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
             if (!canUse) return;
-
-            PlayerTask task = __instance.FindTask(PlayerControl.LocalPlayer);
+            if (task == null) return;
             if (task.TaskType is TaskTypes.FixLights or TaskTypes.RestoreOxy or TaskTypes.ResetReactor or
                 TaskTypes.ResetSeismic or TaskTypes.FixComms or TaskTypes.StopCharles or TaskTypes.MushroomMixupSabotage)
                 return;
@@ -99,17 +107,13 @@ public static class CustomTaskTypePatches
             });
         }
 
-        static void Postfix(Console __instance)
+        internal static void HandlePostfix(PlayerTask task, bool canUse)
         {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
             if (customTaskTypeAbility == null) return;
-
             if (!customTaskTypeAbility.ShouldChangeTask()) return;
-
-            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
             if (!canUse) return;
-
-            PlayerTask task = __instance.FindTask(PlayerControl.LocalPlayer);
+            if (task == null) return;
             if (preMinigame != null)
             {
                 task.MinigamePrefab = preMinigame;
@@ -174,5 +178,23 @@ public static class CustomTaskTypePatches
 
             return null;
         }
+    }
+}
+
+// ポーラス（The Fungle）の気象ノードは MapConsole クラスを使用しているため
+// Console.Use パッチが発火しない。同じ処理を MapConsole.Use にも追加する。
+[HarmonyPatch(typeof(MapConsole), nameof(MapConsole.Use))]
+public static class MapConsoleCustomTaskTypePatch
+{
+    static void Prefix(MapConsole __instance)
+    {
+        __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
+        CustomTaskTypePatches.ConsolePatch.HandlePrefix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
+    }
+
+    static void Postfix(MapConsole __instance)
+    {
+        __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
+        CustomTaskTypePatches.ConsolePatch.HandlePostfix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
     }
 }
