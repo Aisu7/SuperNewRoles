@@ -33,6 +33,11 @@ public static class HideSporeMask
         }
         public static void Postfix(Mushroom __instance)
         {
+            // sporeMask が非アクティブ（SetActive(false)）の場合はカスタムキノコの
+            // 発動前状態なので触らない。SetActive を操作するのは MushroomerAbility 側の責務。
+            if (__instance.sporeMask == null || !__instance.sporeMask.gameObject.activeSelf)
+                return;
+
             if (CanUseGasMask())
                 __instance.sporeMask.transform.localScale = new(0, 0, 0);
             else if (__instance.sporeMask.transform.localScale.x == 0)
