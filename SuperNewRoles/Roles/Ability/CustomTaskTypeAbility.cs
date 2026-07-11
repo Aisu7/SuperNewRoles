@@ -147,7 +147,10 @@ public static class CustomTaskTypePatches
                         {
                             onLoaded(ship);
                         });
-                        break;
+                        // MapLoader.LoadMap は非同期読み込み後にコールバックで onLoaded を呼ぶ。
+                        // ここを break にすると switch を抜けた後に末尾の onLoaded(ShipStatus.Instance) が
+                        // 同期的に実行されてしまい、onLoaded が二重に呼ばれるバグになるため return する。
+                        return;
                     case MapNames.Airship:
                         if (GameOptionsManager.Instance.CurrentGameOptions.MapId == (int)MapNames.Airship)
                         {
@@ -159,42 +162,42 @@ public static class CustomTaskTypePatches
                         {
                             onLoaded(ship);
                         });
-                        break;
+                        return; // 上記 Fungle と同じ理由で return（onLoaded 二重呼び出し防止）
                     default:
                         onLoaded(ShipStatus.Instance);
-                        break;
+                        return;
                 }
             }
 
-            // 現在のマップから取得
+            // targetMap が指定されていない場合は現在のマップから取得
             onLoaded(ShipStatus.Instance);
         }
 
         private static NormalPlayerTask GetTargetTaskFromShip(ShipStatus ship, TaskTypes targetTaskType)
         {
+            // CustomTaskTypeAbility.GetTargetTask() と探索順を統一する
+            // (Short → Common → Long)。以前は Short → Long → Common で不一致だった。
+
             // ショートタスクから探す
             var shortTask = ship.ShortTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
             if (shortTask != null) return shortTask;
 
-            // ロングタスクから探す
-            var longTask = ship.LongTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
-            if (longTask != null) return longTask;
-
             // コモンタスクから探す
             var commonTask = ship.CommonTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
             if (commonTask != null) return commonTask;
+
+            // ロングタスクから探す
+            var longTask = ship.LongTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
+            if (longTask != null) return longTask;
 
             return null;
         }
     }
 }
 
-// ポーラス（The Fungle）の気象ノードタスク（FixWeatherNode）は、他の大多数のタスクが使う
-// Console クラスではなく MapConsole クラスのコンポーネントを使用している。
-// そのため上記の Console.Use パッチだけでは気象ノードのミニゲーム差し替えが発火せず、
-// 「他マップのタスクに変換されるはずのミニゲームが差し替わらない」バグの原因になっていた。
-// ConsolePatch と全く同じロジックを HandlePrefix / HandlePostfix 経由で共有し、
-// MapConsole.Use に対しても同様のパッチを当てることで対応する。
+/* Console クラスではなく MapConsole クラスを使用しているポーラスの気象ノードタスク（FixWeatherNode）を
+ConsolePatch と全く同じロジックを HandlePrefix / HandlePostfix 経由で共有し、
+MapConsole.Use に対しても同様のパッチを当てることで対応する。*/
 [HarmonyPatch(typeof(MapConsole), nameof(MapConsole.Use))]
 public static class MapConsoleCustomTaskTypePatch
 {
