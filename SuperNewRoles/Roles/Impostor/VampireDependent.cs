@@ -53,6 +53,24 @@ public class VampireDependentAbility : AbilityBase
     private EventListener<MurderEventData> _murderListener;
     private EventListener<ExileEventData> _exileListener;
     private EventListener<NameTextUpdateEventData> _nameTextUpdateListener;
+
+    public override void AttachToAlls()
+    {
+        base.AttachToAlls();
+        // ヴァンパイアが死亡した際に眷属も道連れにする処理は
+        // LocalPlayer のみではなく全クライアントで受け取り、
+        // ホストが代表して眷属の死亡を処理する（LocalPlayer 限定だと
+        // 眷属本人がいないクライアントでは処理されないため）
+        _murderListener = MurderEvent.Instance.AddListener(OnMurder);
+        _exileListener = ExileEvent.Instance.AddListener(OnExile);
+    }
+
+    public override void DetachToAlls()
+    {
+        base.DetachToAlls();
+        _murderListener?.RemoveListener();
+        _exileListener?.RemoveListener();
+    }
     private SabotageCanUseAbility sabotageCanUseAbility;
     private DeviceCanUseAbility deviceCanUseAbility;
     private HideInAdminAbility hideInAdminAbility;
@@ -105,16 +123,12 @@ public class VampireDependentAbility : AbilityBase
     public override void AttachToLocalPlayer()
     {
         base.AttachToLocalPlayer();
-        _murderListener = MurderEvent.Instance.AddListener(OnMurder);
-        _exileListener = ExileEvent.Instance.AddListener(OnExile);
         _nameTextUpdateListener = NameTextUpdateEvent.Instance.AddListener(OnNameTextUpdate);
     }
 
     public override void DetachToLocalPlayer()
     {
         base.DetachToLocalPlayer();
-        _murderListener?.RemoveListener();
-        _exileListener?.RemoveListener();
         _nameTextUpdateListener?.RemoveListener();
     }
 
@@ -129,14 +143,18 @@ public class VampireDependentAbility : AbilityBase
 
     private void OnMurder(MurderEventData data)
     {
+        // ホストのみが眷属の死亡処理を行う（全クライアントで重複実行しないよう制御）
+        if (!AmongUsClient.Instance.AmHost) return;
         if (data.target == vampire?.Player && Player.IsAlive())
-            ExPlayerControl.LocalPlayer.RpcCustomDeath(CustomDeathType.VampireWithDead);
+            Player.RpcCustomDeath(CustomDeathType.VampireWithDead);
     }
 
     private void OnExile(ExileEventData data)
     {
+        // ホストのみが眷属の死亡処理を行う（全クライアントで重複実行しないよう制御）
+        if (!AmongUsClient.Instance.AmHost) return;
         if (data.exiled == vampire?.Player && Player.IsAlive())
-            ExPlayerControl.LocalPlayer.RpcCustomDeath(CustomDeathType.VampireWithDeadNonDeadbody);
+            Player.RpcCustomDeath(CustomDeathType.VampireWithDeadNonDeadbody);
     }
 
     public void SetVampire(VampireAbility vampire)
