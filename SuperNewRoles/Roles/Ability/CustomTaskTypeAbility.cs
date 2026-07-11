@@ -85,13 +85,20 @@ public static class CustomTaskTypePatches
             HandlePostfix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
         }
 
+        // Console.Use と MapConsole.Use（気象ノード等）の両方から呼べるよう
+        // 本体ロジックを internal メソッドとして切り出したもの。
+        // 元々は Console.Use の Prefix にすべて直書きされていたが、
+        // 気象ノード（FixWeatherNode）が Console ではなく MapConsole を使うため
+        // ロジックを共通化して MapConsoleCustomTaskTypePatch からも呼べるようにした。
         internal static void HandlePrefix(PlayerTask task, bool canUse)
         {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
             if (customTaskTypeAbility == null) return;
             if (!customTaskTypeAbility.ShouldChangeTask()) return;
             if (!canUse) return;
-            if (task == null) return;
+            if (task == null) return; // MapConsole 経由の場合、対応タスクが無いことがあるため null チェックを追加
+
+            // サボタージュのタスクは対象外（ミニゲームを差し替えない）
             if (task.TaskType is TaskTypes.FixLights or TaskTypes.RestoreOxy or TaskTypes.ResetReactor or
                 TaskTypes.ResetSeismic or TaskTypes.FixComms or TaskTypes.StopCharles or TaskTypes.MushroomMixupSabotage)
                 return;
@@ -107,6 +114,7 @@ public static class CustomTaskTypePatches
             });
         }
 
+        // HandlePrefix で差し替えたミニゲームを、タスク終了後に元へ戻すための共通処理。
         internal static void HandlePostfix(PlayerTask task, bool canUse)
         {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
@@ -181,8 +189,12 @@ public static class CustomTaskTypePatches
     }
 }
 
-// ポーラス（The Fungle）の気象ノードは MapConsole クラスを使用しているため
-// Console.Use パッチが発火しない。同じ処理を MapConsole.Use にも追加する。
+// ポーラス（The Fungle）の気象ノードタスク（FixWeatherNode）は、他の大多数のタスクが使う
+// Console クラスではなく MapConsole クラスのコンポーネントを使用している。
+// そのため上記の Console.Use パッチだけでは気象ノードのミニゲーム差し替えが発火せず、
+// 「他マップのタスクに変換されるはずのミニゲームが差し替わらない」バグの原因になっていた。
+// ConsolePatch と全く同じロジックを HandlePrefix / HandlePostfix 経由で共有し、
+// MapConsole.Use に対しても同様のパッチを当てることで対応する。
 [HarmonyPatch(typeof(MapConsole), nameof(MapConsole.Use))]
 public static class MapConsoleCustomTaskTypePatch
 {
