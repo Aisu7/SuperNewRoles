@@ -205,9 +205,7 @@ public class HitmanAbility : AbilityBase
         _successCount++;
         if (_successCount >= Data.WinKillCount)
         {
-            // 独自単独勝利のため、他の独自単独勝利役職(アーソニスト等)と同様 SingleNeutral を使用する。
-            // 従来 WinType.Default だったため UpdateHijackers が呼ばれてしまい、
-            // 神やマグロ等の横取り役職に上書きされるバグがあった。
+            //WinTypeを修正し単独勝利へと変更
             EndGamer.RpcEndGameWithWinner(CustomGameOverReason.HitmanWin, WinType.SingleNeutral, [Player], Hitman.Instance.RoleColor, "Hitman", string.Empty);
         }
         reSelect();
