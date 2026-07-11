@@ -33,9 +33,9 @@ public class CustomTaskTypeAbility : AbilityBase
     {
         var task = ShipStatus.Instance.ShortTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
         if (task == null)
-            task = ShipStatus.Instance.CommonTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
-        if (task == null)
             task = ShipStatus.Instance.LongTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
+        if (task == null)
+            task = ShipStatus.Instance.CommonTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
         if (task == null)
             return null;
         return task;
@@ -176,28 +176,27 @@ public static class CustomTaskTypePatches
         private static NormalPlayerTask GetTargetTaskFromShip(ShipStatus ship, TaskTypes targetTaskType)
         {
             // CustomTaskTypeAbility.GetTargetTask() と探索順を統一する
-            // (Short → Common → Long)。以前は Short → Long → Common で不一致だった。
+            // (Short → Long → Common)。
 
             // ショートタスクから探す
             var shortTask = ship.ShortTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
             if (shortTask != null) return shortTask;
 
-            // コモンタスクから探す
-            var commonTask = ship.CommonTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
-            if (commonTask != null) return commonTask;
-
             // ロングタスクから探す
             var longTask = ship.LongTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
             if (longTask != null) return longTask;
+
+            // コモンタスクから探す
+            var commonTask = ship.CommonTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
+            if (commonTask != null) return commonTask;
 
             return null;
         }
     }
 }
 
-/* Console クラスではなく MapConsole クラスを使用しているポーラスの気象ノードタスク（FixWeatherNode）を
-ConsolePatch と全く同じロジックを HandlePrefix / HandlePostfix 経由で共有し、
-MapConsole.Use に対しても同様のパッチを当てることで対応する。*/
+//Consoleクラスではなく、MapConsoleクラスを使用しているのポーラスのFixWeatherNodeなどにも同様の適用
+
 [HarmonyPatch(typeof(MapConsole), nameof(MapConsole.Use))]
 public static class MapConsoleCustomTaskTypePatch
 {
