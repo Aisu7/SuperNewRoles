@@ -33,9 +33,9 @@ public class CustomTaskTypeAbility : AbilityBase
     {
         var task = ShipStatus.Instance.ShortTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
         if (task == null)
-            task = ShipStatus.Instance.LongTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
-        if (task == null)
             task = ShipStatus.Instance.CommonTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
+        if (task == null)
+            task = ShipStatus.Instance.LongTasks.FirstOrDefault(x => x.TaskType == TargetTaskType);
         if (task == null)
             return null;
         return task;
@@ -75,32 +75,29 @@ public static class CustomTaskTypePatches
 
         static void Prefix(Console __instance)
         {
-            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
-            HandlePrefix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
-        }
-
-        static void Postfix(Console __instance)
-        {
-            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
-            HandlePostfix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
-        }
-
-        // Console.Use と MapConsole.Use（気象ノード等）の両方から呼べるよう
-        // 本体ロジックを internal メソッドとして切り出したもの。
-        // 元々は Console.Use の Prefix にすべて直書きされていたが、
-        // 気象ノード（FixWeatherNode）が Console ではなく MapConsole を使うため
-        // ロジックを共通化して MapConsoleCustomTaskTypePatch からも呼べるようにした。
-        internal static void HandlePrefix(PlayerTask task, bool canUse)
-        {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
             if (customTaskTypeAbility == null) return;
-            if (!customTaskTypeAbility.ShouldChangeTask()) return;
-            if (!canUse) return;
-            if (task == null) return; // MapConsole 経由の場合、対応タスクが無いことがあるため null チェックを追加
 
-            // サボタージュのタスクは対象外（ミニゲームを差し替えない）
+            if (!customTaskTypeAbility.ShouldChangeTask()) return;
+
+            // Console.CanUse の正しいシグネチャ:
+            // float CanUse(NetworkedPlayerInfo, out bool canUse, out bool couldUse)
+            // 誤って PlayerControl.Data（型が異なる）を渡すとビルドエラーになる
+            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
+            if (!canUse) return;
+
+            PlayerTask task = __instance.FindTask(PlayerControl.LocalPlayer);
+            if (task == null) return;
             if (task.TaskType is TaskTypes.FixLights or TaskTypes.RestoreOxy or TaskTypes.ResetReactor or
                 TaskTypes.ResetSeismic or TaskTypes.FixComms or TaskTypes.StopCharles or TaskTypes.MushroomMixupSabotage)
+                return;
+
+            // FixWeatherNode（気象ノード）は Weather1Game → WeatherSwitchGame という
+            // 2ステージ構成の多段階タスクであり、NormalPlayerTask.TaskStep でどちらの
+            // ステージかを判別できる。単純に MinigamePrefab を1つだけ差し替えると
+            // ステージ2側で状態が壊れる（差し替わらない・元に戻らない）ため、
+            // ステージ1（迷路パート、TaskStep == 0）でのみ差し替えを行う。
+            if (task.TaskType == TaskTypes.FixWeatherNode && task is NormalPlayerTask normalTask && normalTask.TaskStep != 0)
                 return;
 
             preMinigame = task.MinigamePrefab;
@@ -114,14 +111,17 @@ public static class CustomTaskTypePatches
             });
         }
 
-        // HandlePrefix で差し替えたミニゲームを、タスク終了後に元へ戻すための共通処理。
-        internal static void HandlePostfix(PlayerTask task, bool canUse)
+        static void Postfix(Console __instance)
         {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
             if (customTaskTypeAbility == null) return;
+
             if (!customTaskTypeAbility.ShouldChangeTask()) return;
+
+            __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
             if (!canUse) return;
-            if (task == null) return;
+
+            PlayerTask task = __instance.FindTask(PlayerControl.LocalPlayer);
             if (preMinigame != null)
             {
                 task.MinigamePrefab = preMinigame;
@@ -147,10 +147,7 @@ public static class CustomTaskTypePatches
                         {
                             onLoaded(ship);
                         });
-                        // MapLoader.LoadMap は非同期読み込み後にコールバックで onLoaded を呼ぶ。
-                        // ここを break にすると switch を抜けた後に末尾の onLoaded(ShipStatus.Instance) が
-                        // 同期的に実行されてしまい、onLoaded が二重に呼ばれるバグになるため return する。
-                        return;
+                        break;
                     case MapNames.Airship:
                         if (GameOptionsManager.Instance.CurrentGameOptions.MapId == (int)MapNames.Airship)
                         {
@@ -162,22 +159,19 @@ public static class CustomTaskTypePatches
                         {
                             onLoaded(ship);
                         });
-                        return; // 上記 Fungle と同じ理由で return（onLoaded 二重呼び出し防止）
+                        break;
                     default:
                         onLoaded(ShipStatus.Instance);
-                        return;
+                        break;
                 }
             }
 
-            // targetMap が指定されていない場合は現在のマップから取得
+            // 現在のマップから取得
             onLoaded(ShipStatus.Instance);
         }
 
         private static NormalPlayerTask GetTargetTaskFromShip(ShipStatus ship, TaskTypes targetTaskType)
         {
-            // CustomTaskTypeAbility.GetTargetTask() と探索順を統一する
-            // (Short → Long → Common)。
-
             // ショートタスクから探す
             var shortTask = ship.ShortTasks.FirstOrDefault(x => x.TaskType == targetTaskType);
             if (shortTask != null) return shortTask;
@@ -192,23 +186,5 @@ public static class CustomTaskTypePatches
 
             return null;
         }
-    }
-}
-
-//Consoleクラスではなく、MapConsoleクラスを使用しているのポーラスのFixWeatherNodeなどにも同様の適用
-
-[HarmonyPatch(typeof(MapConsole), nameof(MapConsole.Use))]
-public static class MapConsoleCustomTaskTypePatch
-{
-    static void Prefix(MapConsole __instance)
-    {
-        __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
-        CustomTaskTypePatches.ConsolePatch.HandlePrefix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
-    }
-
-    static void Postfix(MapConsole __instance)
-    {
-        __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
-        CustomTaskTypePatches.ConsolePatch.HandlePostfix(__instance.FindTask(PlayerControl.LocalPlayer), canUse);
     }
 }
