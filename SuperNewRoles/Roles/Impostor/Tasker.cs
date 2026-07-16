@@ -79,7 +79,16 @@ public class TaskerAbility : AbilityBase
         if (data.player == null || data.player.PlayerId != Player.PlayerId) return;
         if (Player.IsDead() || !Player.IsTaskComplete()) return;
 
-        EndGamer.EndGameImpostorWin();
+        // タスカーのタスク勝利は固定仕様として乗っ取り不可のため、
+        // EndGameImpostorWin（WinType.Default → UpdateHijackers 経由）ではなく、
+        // 専用の CustomGameOverReason.TaskerWin で終了させる。
+        // EndGamer.UpdateHijackers 側で TaskerWin を早期 return するガードと対になっている。
+        EndGamer.RpcEndGameWithWinner(
+            CustomGameOverReason.TaskerWin,
+            WinType.Default,
+            ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToArray(),
+            Palette.ImpostorRed,
+            "ImpostorWin");
     }
 }
 
