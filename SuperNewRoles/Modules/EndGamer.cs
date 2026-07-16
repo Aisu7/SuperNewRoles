@@ -22,7 +22,30 @@ public enum WinType
     NoWinner
 }
 public static class EndGamer
-{
+{/*
+    public static void EndGame(GameOverReason reason)
+    {
+        List<ExPlayerControl> winners = new();
+        Color32 color = Color.white;
+        string upperText = null;
+        switch (reason)
+        {
+            case GameOverReason.ImpostorsByKill:
+            case GameOverReason.ImpostorsByVote:
+            case GameOverReason.ImpostorsBySabotage:
+                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToList();
+                color = Palette.ImpostorRed;
+                upperText = "ImpostorWin";
+                break;
+            case GameOverReason.CrewmatesByTask:
+            case GameOverReason.CrewmatesByVote:
+                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsCrewmate()).ToList();
+                color = Palette.CrewmateBlue;
+                upperText = "CrewmateWin";
+                break;
+        }
+        EndGame(reason, winners, color, upperText);
+    }*/
     public static void EndGame(GameOverReason reason, WinType winType, HashSet<ExPlayerControl> winners, Color32 color, string upperText, string winText = null)
     {
         if (CustomOptionManager.DebugMode && CustomOptionManager.DebugModeNoGameEnd && reason != (GameOverReason)CustomGameOverReason.Haison)
@@ -105,6 +128,11 @@ public static class EndGamer
     private static void UpdateHijackers(ref GameOverReason reason, ref HashSet<ExPlayerControl> winners, ref Color32 color, ref string upperText, ref string winText, ref WinType winType)
     {
         if (GameSettingOptions.DisableHijackTaskWin && reason == GameOverReason.CrewmatesByTask) return;
+
+        // タスカー（RoleId.Tasker）のタスク勝利は固定仕様として常に乗っ取り不可。
+        // Tasker.OnTaskComplete 側で CustomGameOverReason.TaskerWin を使って終了させており、
+        // ここでそれを検知して UpdateHijackers 自体をスキップする。
+        if (reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
 
         // 三匹の仔豚勝利（優先度最高: Hijackers）
         // - チーム全員が生存していれば勝利
