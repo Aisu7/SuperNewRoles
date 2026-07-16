@@ -69,8 +69,8 @@ public class CamouflagerAbility : AbilityBase
                 PlayerName = originalOutfit.PlayerName,
                 ColorId = originalOutfit.ColorId,
                 SkinId = originalOutfit.SkinId,
-                HatId = originalOutfit.Hat1Id,
-                VisorId = originalOutfit.Visor1Id,
+                HatId = originalOutfit.Hat2Id, // バニラのハットは hat2 に対応するため Hat2Id を使用
+                VisorId = originalOutfit.Visor2Id, // バニラのバイザーは visor2 に対応するため Visor2Id を使用
                 PetId = originalOutfit.PetId
             };
             player.setOutfit(outfit);
@@ -221,8 +221,8 @@ public class CamouflagerAbility : AbilityBase
                 PlayerName = originalOutfit.PlayerName,
                 ColorId = originalOutfit.ColorId,
                 SkinId = originalOutfit.SkinId,
-                HatId = originalOutfit.Hat1Id,
-                VisorId = originalOutfit.Visor1Id,
+                HatId = originalOutfit.Hat2Id, // バニラのハットは hat2 に対応するため Hat2Id を使用
+                VisorId = originalOutfit.Visor2Id, // バニラのバイザーは visor2 に対応するため Visor2Id を使用
                 PetId = originalOutfit.PetId
             };
 
