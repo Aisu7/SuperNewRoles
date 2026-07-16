@@ -17,7 +17,7 @@ class Cleaner : RoleBase<Cleaner>
         () => new CleanerAbility(CleanerCoolTime)
     ];
 
-    public override QuoteMod QuoteMod => QuoteMod.SuperNewRoles;
+    public override QuoteMod QuoteMod => QuoteMod.TheOtherRoles;
     public override AssignedTeamType AssignedTeam => AssignedTeamType.Impostor;
     public override WinnerTeamType WinnerTeam => WinnerTeamType.Impostor;
     public override TeamTag TeamTag => TeamTag.Impostor;
