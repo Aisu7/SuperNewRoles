@@ -93,7 +93,7 @@ public static class EndGamer
     }
     public static void RpcHaison()
     {
-        EndGameManagerSetUpPatch.RpcEndGameWithCondition((GameOverReason)CustomGameOverReason.Haison, ExPlayerControl.ExPlayerControls.Select(x => x.PlayerId).ToList(), "廃 of the 村", [], Color.white, false, "WinText");
+        EndGameManagerSetUpPatch.RpcEndGameWithCondition((GameOverReason)CustomGameOverReason.Haison, ExPlayerControl.ExPlayerControls.Select(x => x.PlayerId).ToList(), "廃 of the 村", [], Color.white, true);
     }
     [CustomRPC]
     public static void RpcSyncAlive(Dictionary<byte, bool> dead)
