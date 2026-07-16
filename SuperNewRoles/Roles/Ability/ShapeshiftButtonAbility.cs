@@ -87,6 +87,13 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
         // Only react if this player is the one shapeshifting and not reverting
         if (data.shapeshifter != Player || data.shapeshifter == data.target) return;
 
+        // 変身前のスケールを保存（ジャンボ等のサイズ変更役職に対応）。
+        // JumboModifier 等が各イベントで data.instance.Player.transform のように
+        // 対象プレイヤーの実体を直接参照しているのと同様、ここでも
+        // PlayerControl.LocalPlayer ではなく Player.Player（この Ability の持ち主）を使う。
+        if (Player.AmOwner)
+            _preShapeshiftScale = Player.Player.transform.localScale;
+
         _shapeTarget = data.target;
         if (Count > 0)
             Count--;
@@ -114,6 +121,8 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
     private EventListener<ShapeshiftEventData> _shapeshiftEvent;
     private EventListener<WrapUpEventData> _wrapUpEvent;
     private EventListener<CalledMeetingEventData> _calledMeetingEvent;
+    // 変身前のスケールを保存（ジャンボ等のサイズ変更役職に対応するため Vector3.one 固定は使わない）
+    private Vector3 _preShapeshiftScale = Vector3.one;
 
     public override void AttachToLocalPlayer()
     {
@@ -156,18 +165,24 @@ public class ShapeshiftButtonAbility : CustomButtonBase, IButtonEffect
 
     /// <summary>
     /// 変身解除後に自分視点でプレイヤーのサイズが小さいまま残るバグへの対処。
-    /// シェイプシフトアニメーション（縮小 → 拡大）の拡大フェーズが
-    /// 正常に完了しない場合に localScale が Vector3.one に戻らないため、
-    /// 一定時間後に強制リセットする。他クライアントは影響を受けない。
+    /// シェイプシフトアニメーション（縮小 → 拡大）の拡大フェーズが正常に完了しない場合に
+    /// localScale が戻らないため、アニメーション完了を待って強制リセットする。
+    /// ジャンボ等の変身前サイズが Vector3.one でない役職にも対応するため、
+    /// Vector3.one 固定ではなく変身前に保存したスケールを使用する。
+    /// JumboModifier が各イベントで data.instance.Player.transform のように対象プレイヤーの
+    /// 実体を直接参照しているのに合わせ、PlayerControl.LocalPlayer に決め打ちせず
+    /// Player.Player（このAbilityの持ち主）の transform を対象にする。
     /// </summary>
-    private static void ResetLocalPlayerScale()
+    private void ResetLocalPlayerScale()
     {
+        if (!Player.AmOwner) return;
+
+        var targetScale = _preShapeshiftScale != Vector3.zero ? _preShapeshiftScale : Vector3.one;
+        PlayerControl targetPlayer = Player.Player;
         new LateTask(() =>
         {
-            var local = PlayerControl.LocalPlayer;
-            if (local != null && local.transform.localScale != Vector3.one)
-                local.transform.localScale = Vector3.one;
-        }, 0.5f, "ResetScaleAfterShapeshift");
+            if (targetPlayer != null && targetPlayer.transform.localScale != targetScale)
+                targetPlayer.transform.localScale = targetScale;
+        }, 1.2f, "ResetScaleAfterShapeshift");
     }
 }
-
