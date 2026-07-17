@@ -35,7 +35,7 @@ class MadCleaner : RoleBase<MadCleaner>
     public override RoleOptionMenuType OptionTeam { get; } = RoleOptionMenuType.Crewmate;
 
     // --- Cleaner Ability ---
-    [CustomOptionFloat("MadCleanerCoolTime", 40f, 70f, 2.5f, 60f, translationName: "CoolTime")]
+    [CustomOptionFloat("MadCleanerCoolTime", 40f, 70f, 2.5f, 60f, translationName: "CleanerCoolTime")]
     public static float MadCleanerCoolTime;
 
     
