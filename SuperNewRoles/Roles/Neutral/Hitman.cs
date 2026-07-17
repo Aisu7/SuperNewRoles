@@ -205,7 +205,6 @@ public class HitmanAbility : AbilityBase
         _successCount++;
         if (_successCount >= Data.WinKillCount)
         {
-            //WinTypeを修正し単独勝利へと変更
             EndGamer.RpcEndGameWithWinner(CustomGameOverReason.HitmanWin, WinType.SingleNeutral, [Player], Hitman.Instance.RoleColor, "Hitman", string.Empty);
         }
         reSelect();
