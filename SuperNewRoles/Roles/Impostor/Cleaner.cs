@@ -25,6 +25,6 @@ class Cleaner : RoleBase<Cleaner>
     public override short IntroNum => 1;
     public override RoleOptionMenuType OptionTeam => RoleOptionMenuType.Impostor;
 
-    [CustomOptionFloat("CleanerCoolTime", 40f, 70f, 2.5f, 60f, translationName: "CoolTime")]
+    [CustomOptionFloat("CleanerCoolTime", 40f, 70f, 2.5f, 60f, translationName: "CleanerCoolTime")]
     public static float CleanerCoolTime;
 }
