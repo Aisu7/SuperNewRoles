@@ -93,11 +93,11 @@ public static class EndGamer
             resolvedWinText = "SingleNeutralWinText";
         }
         resolvedWinText ??= "WinText";
-        EndGameManagerSetUpPatch.RpcEndGameWithCondition(reason, winners.Select(x => x.PlayerId).ToList(), upperText ?? reason.ToString(), addWinners.Select(x => x.ToString()).ToHashSet().ToList(), color, false, resolvedWinText);
+        EndGameManagerSetUpPatch.RpcEndGameWithCondition(reason, winners.Select(x => x.PlayerId).ToList(), upperText ?? reason.ToString(), addWinners.Select(x => x.ToString()).ToHashSet().ToList()[...]
     }
     public static void RpcHaison()
     {
-        EndGameManagerSetUpPatch.RpcEndGameWithCondition((GameOverReason)CustomGameOverReason.Haison, ExPlayerControl.ExPlayerControls.Select(x => x.PlayerId).ToList(), "廃 of the 村", [], Color.white, true);
+        EndGameManagerSetUpPatch.RpcEndGameWithCondition((GameOverReason)CustomGameOverReason.Haison, ExPlayerControl.ExPlayerControls.Select(x => x.PlayerId).ToList(), "廃 of the 村", [], Colo[...]
     }
     [CustomRPC]
     public static void RpcSyncAlive(Dictionary<byte, bool> dead)
@@ -148,7 +148,7 @@ public static class EndGamer
         // ここでそれを検知して UpdateHijackers 自体をスキップする。
         if (reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
 
-        // 三匹の仔豚勝利（優先度: Hijackers）
+        // 三匹の仔豚勝利（優先度: 最高・分岐なし）
         // 旧仕様:
         // - チーム全員が生存していれば勝利
         // - そうでなくても、生存キラー(インポスター/ジャッカル/その他キラー)が全滅していれば勝利
@@ -179,40 +179,31 @@ public static class EndGamer
             }
         }
 
-        // 神：マグロ/陰陽師/スペランカーが勝利条件を満たしていない場合のみ勝利
-        // （「生存しているか」ではなく「実際に勝利条件を満たしたか」で判定する必要がある。
-        //   例えば陰陽師はタスク未完了だと生きていても勝利条件を満たさないため、
-        //   その場合は神をブロックしてはいけない）
-        bool otherHijackerWon =
-            (Tuna.EnableTunaSoloWin && ExPlayerControl.ExPlayerControls.Any(p => p.Role == RoleId.Tuna && p.IsAlive()))
-            || ExPlayerControl.ExPlayerControls.Any(p => p.Role == RoleId.OrientalShaman && p.IsAlive()
-                && (!OrientalShaman.OrientalShamanNeededTaskComplete || p.IsTaskComplete()))
-            || (!Spelunker.SpelunkerIsAdditionalWin && ExPlayerControl.ExPlayerControls.Any(p => p.Role == RoleId.Spelunker && p.IsAlive()));
-
+        // === 神（優先度: 低��後で他役職に上書きされる対象）===
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role == RoleId.God && player.IsAlive())
             {
                 if (God.GodNeededTask && !player.IsTaskComplete()) continue;
-                if (otherHijackerWon) continue;
+
+                winners = new HashSet<ExPlayerControl> { player };
                 reason = (GameOverReason)CustomGameOverReason.GodWin;
-                winners.Add(player);
-                // 既に他の乗っ取り役職が upperText を設定済みの場合は
-                // 上書きせず追加表示（& 結合）用のリストに積む
-                AddHijackUpperText(ref upperText, hijackAddWinners, "God");
                 color = God.Instance.RoleColor;
+                upperText = "God";
                 winText = "GodDescends";
                 winType = WinType.Hijackers;
             }
         }
+
+        // === マグロ（優先度: 中。神を上書き）===
         if (Tuna.EnableTunaSoloWin)
         {
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
             {
                 if (player.Role == RoleId.Tuna && player.IsAlive())
                 {
+                    winners = new HashSet<ExPlayerControl> { player };
                     reason = (GameOverReason)CustomGameOverReason.TunaWin;
-                    winners.Add(player);
                     AddHijackUpperText(ref upperText, hijackAddWinners, "Tuna");
                     color = Tuna.Instance.RoleColor;
                     winText = null;
@@ -221,21 +212,21 @@ public static class EndGamer
             }
         }
 
-        // タスカー：タスク完了で乗っ取り勝利する（固定仕様として横取り不可のため、
-        // 既に UpdateHijackers に到達した時点で reason が CrewmatesByTask 以外であっても
-        // タスク完了を満たしていれば勝利する）。
+        // === タスカー（優先度: 中。神を上書き。固定仕様として横取り不可）===
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role == RoleId.Tasker && player.IsAlive() && player.IsTaskComplete())
             {
+                winners = new HashSet<ExPlayerControl> { player };
                 reason = (GameOverReason)CustomGameOverReason.TaskerWin;
-                winners.Add(player);
                 AddHijackUpperText(ref upperText, hijackAddWinners, "Tasker");
                 color = Tasker.Instance.RoleColor;
                 winText = null;
                 winType = WinType.Hijackers;
             }
         }
+
+        // === 陰陽師（優先度: 中。神を上書き）===
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role != RoleId.OrientalShaman || player.IsDead()) continue;
@@ -243,9 +234,10 @@ public static class EndGamer
                 continue;
             if (player.TryGetAbility<OrientalShamanAbility>(out var orientalShamanAbility))
             {
-                winners.Add(player);
+                winners = new HashSet<ExPlayerControl> { player };
                 if (orientalShamanAbility._servant?.Player != null)
                     winners.Add(orientalShamanAbility._servant.Player);
+                reason = (GameOverReason)CustomGameOverReason.OrientalShamanWin;
                 AddHijackUpperText(ref upperText, hijackAddWinners, "OrientalShaman");
                 color = OrientalShaman.Instance.RoleColor;
                 winText = null;
@@ -253,15 +245,16 @@ public static class EndGamer
                 break;
             }
         }
-        // ラバーズ勝利を優先する
+
+        // === スペランカー（優先度: 中。神を上書き。Lovers優先）===
         if (!Spelunker.SpelunkerIsAdditionalWin)
         {
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
             {
                 if (player.Role == RoleId.Spelunker && player.IsAlive())
                 {
+                    winners = new HashSet<ExPlayerControl> { player };
                     reason = (GameOverReason)CustomGameOverReason.SpelunkerWin;
-                    winners.Add(player);
                     AddHijackUpperText(ref upperText, hijackAddWinners, "Spelunker");
                     color = Spelunker.Instance.RoleColor;
                     winText = null;
@@ -269,45 +262,46 @@ public static class EndGamer
                 }
             }
         }
-        bool moiraOrFrankensteinMatched = false;
+
+        // === Moira（優先度: 高。神/マグロ/陰陽師/スペランカーを上書き。Frankensteinとは同時勝利可）===
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role != RoleId.Moira || player.IsDead()) continue;
-            if (!player.TryGetAbility<MoiraMeetingAbility>(out var moiraAbility)) continue;
-            if (moiraAbility.HasCount) continue;
+            if (!player.TryGetAbility<MoiraMeetingAbility>(out var moiraAbility) || moiraAbility.HasCount) continue;
 
+            winners = new HashSet<ExPlayerControl> { player };
             reason = (GameOverReason)CustomGameOverReason.MoiraWin;
-            // モイラ・フランケンシュタイン以外(神/マグロ/陰陽師/スペランカー)の結果は上書きする。
-            // ただしこの後のフランケンシュタイン判定とは同時勝利させたいため、ここではまだ return しない。
-            winners = [player];
             color = Moira.Instance.RoleColor;
             upperText = "Moira";
             winText = null;
             winType = WinType.SingleNeutral;
-            moiraOrFrankensteinMatched = true;
+            break; // Moiraが確定したら後続判定へ
         }
 
+        // === Frankenstein（優先度: 高。Moiraが不成立の場合は神系を上書き。Moiraが成立なら追加）===
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role != RoleId.Frankenstein || player.IsDead()) continue;
-            if (!player.TryGetAbility<FrankensteinAbility>(out var frankensteinAbility)) continue;
-            if (frankensteinAbility.RemainingKillsToWin > 0) continue;
+            if (!player.TryGetAbility<FrankensteinAbility>(out var frankensteinAbility) || frankensteinAbility.RemainingKillsToWin > 0) continue;
 
-            reason = (GameOverReason)CustomGameOverReason.FrankensteinWin;
-            // モイラが既に勝利している場合はそちらを消さずに追加する（モイラ・フランケン間のみ同時勝利可）。
-            // モイラが不成立の場合はここで神/マグロ/陰陽師/スペランカーの結果を上書きする。
-            if (moiraOrFrankensteinMatched)
+            // Moiraが既に設定されているか判定
+            if (reason == (GameOverReason)CustomGameOverReason.MoiraWin)
+            {
+                // Moiraとの同時勝利
                 winners.Add(player);
+            }
             else
-                winners = [player];
+            {
+                // Moiraが不成立 → 神系を上書き
+                winners = new HashSet<ExPlayerControl> { player };
+                upperText = "Frankenstein";
+            }
+            reason = (GameOverReason)CustomGameOverReason.FrankensteinWin;
             color = Frankenstein.Instance.RoleColor;
-            upperText = "Frankenstein";
             winText = null;
             winType = WinType.SingleNeutral;
-            moiraOrFrankensteinMatched = true;
+            return;
         }
-
-        if (moiraOrFrankensteinMatched) return;
     }
     private static void UpdateAdditionalWinners(GameOverReason reason, ref HashSet<ExPlayerControl> winners, out HashSet<string> addWinners, ref string winText, bool cantWinSixAdditionalWinners)
     {
