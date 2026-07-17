@@ -143,6 +143,11 @@ public static class EndGamer
     {
         if (GameSettingOptions.DisableHijackTaskWin && reason == GameOverReason.CrewmatesByTask) return;
 
+        // タスカー（RoleId.Tasker）のタスク勝利は固定仕様として常に乗っ取り不可。
+        // Tasker.OnTaskComplete 側で CustomGameOverReason.TaskerWin を使って終了させており、
+        // ここでそれを検知して UpdateHijackers 自体をスキップする。
+        if (reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
+
         // 三匹の仔豚勝利（優先度: Hijackers）
         // 旧仕様:
         // - チーム全員が生存していれば勝利
