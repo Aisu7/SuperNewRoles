@@ -22,7 +22,30 @@ public enum WinType
     NoWinner
 }
 public static class EndGamer
-{
+{/*
+    public static void EndGame(GameOverReason reason)
+    {
+        List<ExPlayerControl> winners = new();
+        Color32 color = Color.white;
+        string upperText = null;
+        switch (reason)
+        {
+            case GameOverReason.ImpostorsByKill:
+            case GameOverReason.ImpostorsByVote:
+            case GameOverReason.ImpostorsBySabotage:
+                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToList();
+                color = Palette.ImpostorRed;
+                upperText = "ImpostorWin";
+                break;
+            case GameOverReason.CrewmatesByTask:
+            case GameOverReason.CrewmatesByVote:
+                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsCrewmate()).ToList();
+                color = Palette.CrewmateBlue;
+                upperText = "CrewmateWin";
+                break;
+        }
+        EndGame(reason, winners, color, upperText);
+    }*/
     public static void EndGame(GameOverReason reason, WinType winType, HashSet<ExPlayerControl> winners, Color32 color, string upperText, string winText = null)
     {
         if (CustomOptionManager.DebugMode && CustomOptionManager.DebugModeNoGameEnd && reason != (GameOverReason)CustomGameOverReason.Haison)
