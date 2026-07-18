@@ -22,30 +22,7 @@ public enum WinType
     NoWinner
 }
 public static class EndGamer
-{/*
-    public static void EndGame(GameOverReason reason)
-    {
-        List<ExPlayerControl> winners = new();
-        Color32 color = Color.white;
-        string upperText = null;
-        switch (reason)
-        {
-            case GameOverReason.ImpostorsByKill:
-            case GameOverReason.ImpostorsByVote:
-            case GameOverReason.ImpostorsBySabotage:
-                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToList();
-                color = Palette.ImpostorRed;
-                upperText = "ImpostorWin";
-                break;
-            case GameOverReason.CrewmatesByTask:
-            case GameOverReason.CrewmatesByVote:
-                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsCrewmate()).ToList();
-                color = Palette.CrewmateBlue;
-                upperText = "CrewmateWin";
-                break;
-        }
-        EndGame(reason, winners, color, upperText);
-    }*/
+{
     public static void EndGame(GameOverReason reason, WinType winType, HashSet<ExPlayerControl> winners, Color32 color, string upperText, string winText = null)
     {
         if (CustomOptionManager.DebugMode && CustomOptionManager.DebugModeNoGameEnd && reason != (GameOverReason)CustomGameOverReason.Haison)
@@ -129,14 +106,22 @@ public static class EndGamer
         EndGame(GameOverReason.ImpostorsByKill, WinType.Default, ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToHashSet(), Palette.ImpostorRed, "ImpostorWin");
     }
     // 単純生存横取り勝利（神/マグロ/陰陽師/スペランカー）の同時勝利用ヘルパー。
-    // 最初にマッチした役職は upperText にそのまま設定し、
-    // 2件目以降は hijackAddWinners（& 表示用リスト）に積む。
-    private static void AddHijackUpperText(ref string upperText, HashSet<string> hijackAddWinners, string text)
+    // hasHijackWon を使って「乗っ取りが今回初めて成立したか」を判定し、
+    // 初回はそれまでの upperText（元の勝利理由等）を破棄して置き換える。
+    // これをしないと、UpdateHijackers 呼び出し前に upperText に入っていた
+    // 元の勝利理由（例: "ImpostorWin"）が「既に乗っ取り済みの役職」と誤認され、
+    // & 表示に混入してしまう（例: "ImpostorWin & Spelunker"）。
+    private static void AddHijackUpperText(ref string upperText, ref bool hasHijackWon, HashSet<string> hijackAddWinners, string text)
     {
-        if (string.IsNullOrEmpty(upperText))
+        if (!hasHijackWon)
+        {
             upperText = text;
+            hasHijackWon = true;
+        }
         else if (upperText != text)
+        {
             hijackAddWinners.Add(text);
+        }
     }
 
     private static void UpdateHijackers(ref GameOverReason reason, ref HashSet<ExPlayerControl> winners, ref Color32 color, ref string upperText, ref string winText, ref WinType winType, HashSet<string> hijackAddWinners)
@@ -147,6 +132,10 @@ public static class EndGamer
         // Tasker.OnTaskComplete 側で CustomGameOverReason.TaskerWin を使って単独で終了させており、
         // ここで検知した場合は UpdateHijackers 自体を完全にスキップする（乗っ取られもしないし、乗っ取りもしない）。
         if (reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
+
+        // 乗っ取り役職のうち誰か一人でも条件を満たしたら true になる。
+        // upperText を初回だけ強制的にリセットするために使用する。
+        bool hasHijackWon = false;
 
         // 三匹の仔豚勝利（優先度: 最高・分岐なし）
         // 旧仕様:
@@ -190,6 +179,7 @@ public static class EndGamer
                 reason = (GameOverReason)CustomGameOverReason.GodWin;
                 color = God.Instance.RoleColor;
                 upperText = "God";
+                hasHijackWon = true;
                 winText = "GodDescends";
                 winType = WinType.Hijackers;
             }
@@ -204,7 +194,7 @@ public static class EndGamer
                 {
                     winners = new HashSet<ExPlayerControl> { player };
                     reason = (GameOverReason)CustomGameOverReason.TunaWin;
-                    AddHijackUpperText(ref upperText, hijackAddWinners, "Tuna");
+                    AddHijackUpperText(ref upperText, ref hasHijackWon, hijackAddWinners, "Tuna");
                     color = Tuna.Instance.RoleColor;
                     winText = null;
                     winType = WinType.Hijackers;
@@ -223,8 +213,9 @@ public static class EndGamer
                 winners = new HashSet<ExPlayerControl> { player };
                 if (orientalShamanAbility._servant?.Player != null)
                     winners.Add(orientalShamanAbility._servant.Player);
-                reason = (GameOverReason)CustomGameOverReason.OrientalShamanWin;
-                AddHijackUpperText(ref upperText, hijackAddWinners, "OrientalShaman");
+                // CustomGameOverReasonにOrientalShamanWinは存在しないため、
+                // reasonは変更せず元の勝利理由(誰かがキル/追放された理由)のまま据え置く
+                AddHijackUpperText(ref upperText, ref hasHijackWon, hijackAddWinners, "OrientalShaman");
                 color = OrientalShaman.Instance.RoleColor;
                 winText = null;
                 winType = WinType.Hijackers;
@@ -241,7 +232,7 @@ public static class EndGamer
                 {
                     winners = new HashSet<ExPlayerControl> { player };
                     reason = (GameOverReason)CustomGameOverReason.SpelunkerWin;
-                    AddHijackUpperText(ref upperText, hijackAddWinners, "Spelunker");
+                    AddHijackUpperText(ref upperText, ref hasHijackWon, hijackAddWinners, "Spelunker");
                     color = Spelunker.Instance.RoleColor;
                     winText = null;
                     winType = WinType.Hijackers;
