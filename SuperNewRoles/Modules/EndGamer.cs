@@ -128,7 +128,7 @@ public static class EndGamer
         if (!AmongUsClient.Instance.AmHost) return;
         EndGame(GameOverReason.ImpostorsByKill, WinType.Default, ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToHashSet(), Palette.ImpostorRed, "ImpostorWin");
     }
-    // 単純生存横取り勝利（神/マグロ/陰陽師/スペランカー/タスカー）の同時勝利用ヘルパー。
+    // 単純生存横取り勝利（神/マグロ/陰陽師/スペランカー）の同時勝利用ヘルパー。
     // 最初にマッチした役職は upperText にそのまま設定し、
     // 2件目以降は hijackAddWinners（& 表示用リスト）に積む。
     private static void AddHijackUpperText(ref string upperText, HashSet<string> hijackAddWinners, string text)
@@ -143,9 +143,9 @@ public static class EndGamer
     {
         if (GameSettingOptions.DisableHijackTaskWin && reason == GameOverReason.CrewmatesByTask) return;
 
-        // タスカー（RoleId.Tasker）のタスク勝利は固定仕様として常に乗っ取り不可。
-        // Tasker.OnTaskComplete 側で CustomGameOverReason.TaskerWin を使って終了させており、
-        // ここでそれを検知して UpdateHijackers 自体をスキップする。
+        // タスカー（RoleId.Tasker）のタスク勝利は固定仕様として常に乗っ取り不可・乗っ取り側にもならない。
+        // Tasker.OnTaskComplete 側で CustomGameOverReason.TaskerWin を使って単独で終了させており、
+        // ここで検知した場合は UpdateHijackers 自体を完全にスキップする（乗っ取られもしないし、乗っ取りもしない）。
         if (reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
 
         // 三匹の仔豚勝利（優先度: 最高・分岐なし）
@@ -209,20 +209,6 @@ public static class EndGamer
                     winText = null;
                     winType = WinType.Hijackers;
                 }
-            }
-        }
-
-        // === タスカー（優先度: 中。神を上書き。固定仕様として横取り不可）===
-        foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
-        {
-            if (player.Role == RoleId.Tasker && player.IsAlive() && player.IsTaskComplete())
-            {
-                winners = new HashSet<ExPlayerControl> { player };
-                reason = (GameOverReason)CustomGameOverReason.TaskerWin;
-                AddHijackUpperText(ref upperText, hijackAddWinners, "Tasker");
-                color = Tasker.Instance.RoleColor;
-                winText = null;
-                winType = WinType.Hijackers;
             }
         }
 
@@ -377,7 +363,7 @@ public static class EndGamer
             if (player.Role == RoleId.PartTimer)
             {
                 PartTimerAbility partTimerAbility = player.GetAbility<PartTimerAbility>();
-                if (partTimerAbility != null && partTimerAbility._employer != null && (winners.Contains(partTimerAbility._employer) || winners.Contains(partTimerAbility._employer)))
+                if (partTimerAbility != null && partTimerAbility._employer != null && winners.Contains(partTimerAbility._employer))
                 {
                     // 生存勝利設定がONで死んでいる場合は勝利しない
                     if (partTimerAbility._data.needAliveToWin && player.IsDead()) continue;
