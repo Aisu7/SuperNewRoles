@@ -62,9 +62,17 @@ public static class EndGamer
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
             {
                 if (!player.IsImpostorWinTeam())
+                {
+                // IsDead = true にする前に、まだ生存していたプレイヤーの死因をサボタージュとして記録する。
+                // ここで先に IsDead を立ててしまうと、後段の UpdatePlayerStatusForSabotage
+                // （EndGameScene.cs）が「!player.IsDead」を条件にしているため発動せず、
+                // 死因がサボタージュとして表示されなくなるバグがあった。
+                if (player.IsAlive())
+                    player.FinalStatus = FinalStatus.Sabotage;
                     player.Data.IsDead = true;
-            }
         }
+    }
+}
 
         if (winType != WinType.NoWinner)
         {
