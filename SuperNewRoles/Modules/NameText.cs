@@ -222,6 +222,7 @@ public static class NameText
         DieEvent.Instance.AddListener(x => { if (x.player?.PlayerId == ExPlayerControl.LocalPlayer?.PlayerId) new LateTask(() => UpdateAllNameInfo(), 0.5f); });
         WrapUpEvent.Instance.AddListener(x => UpdateAllNameInfo());
         MeetingStartEvent.Instance.AddListener(x => UpdateAllNameInfo());
+        SaboEndEvent.Instance.AddListener(x => { if (x.saboType == SystemTypes.Comms) UpdateAllNameInfo(); });
         FixedUpdateEvent.Instance.AddListener(UpdateAllVisible);
         _lastDead = new();
     }
