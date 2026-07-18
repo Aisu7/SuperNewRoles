@@ -401,12 +401,16 @@ public class EndGameManagerSetUpPatch
                 __instance.WinText.color = HaisonColor;
             }
 
-            textRenderer.color = endGameCondition.IsHaison ? Color.clear : endGameCondition.UpperTextColor;
-            // UpperText の後ろに追加のテキストがあれば結合
-            var upperText = endGameCondition.UpperText;
+            textRenderer.color = endGameCondition.IsHaison ? Color.clear : Color.white; // 全体色はリッチテキストタグで個別指定するため白に固定（Haison時は非表示のまま維持）
+            // UpperText は役職固有色、"&"以降の追加勝利者は白色でリッチテキスト表示する
+            string mainColorHex = ColorUtility.ToHtmlStringRGB(endGameCondition.UpperTextColor);
+            var upperText = endGameCondition.IsHaison
+                ? endGameCondition.UpperText
+                : $"<color=#{mainColorHex}>{endGameCondition.UpperText}</color>";
             if (endGameCondition.additionalWinTexts != null && endGameCondition.additionalWinTexts.Any())
             {
-                upperText += " & " + string.Join(" & ", endGameCondition.additionalWinTexts);
+                // "&" 区切りと追加役職名は白色（デフォルト色）のまま結合する
+                upperText += " <color=#FFFFFF>&amp; " + string.Join(" &amp; ", endGameCondition.additionalWinTexts) + "</color>";
             }
             textRenderer.text = upperText + " " + endGameCondition.winText;
             __instance.BackgroundBar.material.SetColor("_Color", endGameCondition.UpperTextColor);
@@ -770,12 +774,11 @@ public static class OnGameEndPatch
     {
         if (gameOverReason == GameOverReason.ImpostorsBySabotage && !player.IsDead && !player.Role.IsImpostor)
         {
-            //もともとサボタージュ勝利時、プレイヤーを死亡させてから生存者の死因をサボタージュとしていたので、コードの順番を入れ替えた。
+            player.IsDead = true;
             if (exPlayer.IsAlive())
             {
                 exPlayer.FinalStatus = FinalStatus.Sabotage;
             }
-            player.IsDead = true;
         }
     }
 }
