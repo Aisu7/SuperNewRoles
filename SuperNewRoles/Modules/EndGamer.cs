@@ -255,7 +255,7 @@ public static class EndGamer
             break; // Moiraが確定したら後続判定へ
         }
 
-        // === Frankenstein（優先度: 高。Moiraが不成立の場合は神系を上書き。Moiraが成立なら追加）===
+        // === Frankenstein（優先度: 高。Moiraが不成立の場合は神系を上書き。Moiraが成立なら同時勝利として&表示に追加）===
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role != RoleId.Frankenstein || player.IsDead()) continue;
@@ -264,8 +264,11 @@ public static class EndGamer
             // Moiraが既に設定されているか判定
             if (reason == (GameOverReason)CustomGameOverReason.MoiraWin)
             {
-                // Moiraとの同時勝利
+                // Moiraとの同時勝利。upperTextは"Moira"のまま残し、
+                // Frankensteinはhijackと同様に&表示用リストへ追加する。
+                // (これをしないと「Moira」としか表示されずFrankensteinが画面上消えるバグになる)
                 winners.Add(player);
+                hijackAddWinners.Add("Frankenstein");
             }
             else
             {
