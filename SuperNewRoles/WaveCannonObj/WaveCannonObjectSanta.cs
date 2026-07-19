@@ -158,7 +158,7 @@ public class WaveCannonObjectSanta : WaveCannonObjectBase
         santaHandler.Init(ability, _isFlipX);
         // 発射終了後にWaveCannonObjectがDestroyされてもサンタが破棄されないよう、親子付けしない
         santaHandler.transform.position = _gameObject.transform.TransformPoint(new Vector3(-2.4f + 3.3f, 0.275f, 0.1f));
-        santaHandler.transform.localScale = new(_isFlipX ? 0.1f : -0.1f, 0.1f, 0.1f);
+        santaHandler.transform.localScale = new(_isFlipX ? -0.1f : 0.1f, 0.1f, 0.1f);
         santaHandler.moveX = 2.4f;
         _santas.Add(santaHandler);
         _santaSpawnTimer = SantaSpawnTimeInterval;
