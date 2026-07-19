@@ -234,18 +234,6 @@ public static class EndGamer
             wType = WinType.Hijackers;
         }
 
-        // === 神 ===
-        foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
-        {
-            if (player.Role == RoleId.God && player.IsAlive())
-            {
-                if (God.GodNeededTask && !player.IsTaskComplete()) continue;
-                reason = (GameOverReason)CustomGameOverReason.GodWin;
-                AddHijackWinner(player, "God", God.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
-                if (winType == WinType.Hijackers) winText = "GodDescends";
-            }
-        }
-
         // === マグロ ===
         if (Tuna.EnableTunaSoloWin)
         {
@@ -288,6 +276,26 @@ public static class EndGamer
                     reason = (GameOverReason)CustomGameOverReason.SpelunkerWin;
                     AddHijackWinner(player, "Spelunker", Spelunker.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
                     winText = null;
+                }
+            }
+        }
+
+        // === 神（優先度最下位。マグロ/陰陽師/スペランカーの誰かが既に乗っ取っていたら発動しない）===
+        // 神は本来「誰も他に乗っ取り役職がいない場合のみ勝つ」役職のため、判定順序を最後にし、
+        // hasHijackWon が既に true（誰かが先に乗っ取り済み）なら完全にスキップする。
+        // 以前は判定順序が神→マグロ→陰陽師→スペランカーだったため、
+        // 神が先に AddHijackWinner を呼んで hasHijackWon=true になってしまい、
+        // 後続の役職が「神を上書き」ではなく「神に & で追加」される誤動作の原因になっていた。
+        if (!hasHijackWon)
+        {
+            foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
+            {
+                if (player.Role == RoleId.God && player.IsAlive())
+                {
+                    if (God.GodNeededTask && !player.IsTaskComplete()) continue;
+                    reason = (GameOverReason)CustomGameOverReason.GodWin;
+                    AddHijackWinner(player, "God", God.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
+                    if (winType == WinType.Hijackers) winText = "GodDescends";
                 }
             }
         }
