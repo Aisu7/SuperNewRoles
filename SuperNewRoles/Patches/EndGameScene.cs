@@ -431,7 +431,11 @@ public class EndGameManagerSetUpPatch
                     upperText += $" <color=#FFFFFF>&</color> <color=#{colorHex}>{text}</color>";
                 }
             }
-            textRenderer.text = upperText + " " + endGameCondition.winText;
+            // winText（"GodDescends"等）も白固定ではなくメインの役職色(UpperTextColor)で表示する
+            string winTextColored = string.IsNullOrEmpty(endGameCondition.winText)
+                ? ""
+                : $" <color=#{mainColorHex}>{endGameCondition.winText}</color>";
+            textRenderer.text = upperText + winTextColored;
             __instance.BackgroundBar.material.SetColor("_Color", endGameCondition.UpperTextColor);
         }
 
