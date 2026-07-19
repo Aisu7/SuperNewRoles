@@ -64,7 +64,7 @@ public class WCSantaHandler : MonoBehaviour
         // 砲台本体(_gameObject)は localScale.x = isFlipX?-1:1 で正しく向きを表現しているが、
         // サンタは親子付けされていないため、移動はここで独自に符号を持つ必要があった。
         // 従来は flip をそのまま使っていたため、移動方向が砲台の向きと逆になっていた。
-        transform.localPosition += new Vector3(-flip * SantaSpeed * Time.deltaTime, 0, 0);
+        transform.localPosition += new Vector3(flip * SantaSpeed * Time.deltaTime, 0, 0);
 
         // 撃ち終わり(Detach)後もサンタ自体が死亡判定を持ち続ける
         TryKillTouchingPlayers();
