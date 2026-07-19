@@ -194,11 +194,22 @@ public class EndGameManagerSetUpPatch
     public static void EndGameWithCondition(GameOverReason reason, List<byte> winners, string UpperText, List<string> additionalWinTexts, Color UpperTextColor, bool IsHaison, string winText = "WinText", bool validTranslation = true)
     {
         if (fadeObject != null) return;
+        // additionalWinTexts の各要素は EndGamer.EncodeWithColor により
+        // "翻訳キー\x1FRRGGBB" 形式でエンコードされている場合がある。
+        // 翻訳キー部分だけを ModTranslation.TryGetString に渡し、色情報は分離して保持したまま再結合する。
+        List<string> resolvedAdditionalWinTexts = additionalWinTexts.Select(x =>
+        {
+            int sepIndex = x.IndexOf(EndGamer.ColorEncodeSeparator);
+            string key = sepIndex >= 0 ? x[..sepIndex] : x;
+            string colorSuffix = sepIndex >= 0 ? x[sepIndex..] : "";
+            string translated = !validTranslation ? key : ModTranslation.TryGetString(key, out var val) ? val : "<INVALID_TEXT>";
+            return translated + colorSuffix;
+        }).ToList();
         EndGameCondition newCond = new(
             reason: reason,
             winners: winners,
             UpperText: !validTranslation ? UpperText : ModTranslation.TryGetString(UpperText, out var value) ? value : "<INVALID_TEXT>",
-            additionalWinTexts: additionalWinTexts.Select(x => !validTranslation ? x : ModTranslation.TryGetString(x, out var val) ? val : "<INVALID_TEXT>").ToList(),
+            additionalWinTexts: resolvedAdditionalWinTexts,
             UpperTextColor: UpperTextColor,
             IsHaison: IsHaison,
             winText: !validTranslation ? winText : ModTranslation.TryGetString(winText, out var winVal) ? winVal : "<INVALID_TEXT>"
@@ -402,15 +413,23 @@ public class EndGameManagerSetUpPatch
             }
 
             textRenderer.color = endGameCondition.IsHaison ? Color.clear : Color.white; // 全体色はリッチテキストタグで個別指定するため白に固定（Haison時は非表示のまま維持）
-            // UpperText は役職固有色、"&"以降の追加勝利者は白色でリッチテキスト表示する
+            // UpperText は役職固有色。追加勝利者(additionalWinTexts)も
+            // それぞれ自分の RoleColor で個別に色付けし、"&" 区切りだけ白色にする。
             string mainColorHex = ColorUtility.ToHtmlStringRGB(endGameCondition.UpperTextColor);
             var upperText = endGameCondition.IsHaison
                 ? endGameCondition.UpperText
                 : $"<color=#{mainColorHex}>{endGameCondition.UpperText}</color>";
             if (endGameCondition.additionalWinTexts != null && endGameCondition.additionalWinTexts.Any())
             {
-                // "&" 区切りと追加役職名は白色（デフォルト色）のまま結合する
-                upperText += " <color=#FFFFFF>&amp; " + string.Join(" &amp; ", endGameCondition.additionalWinTexts) + "</color>";
+                foreach (var entry in endGameCondition.additionalWinTexts)
+                {
+                    // "翻訳済みテキスト\x1FRRGGBB" 形式をデコードする。
+                    // 色情報が付いていない古い形式が来た場合は白色にフォールバックする。
+                    int sepIndex = entry.IndexOf(EndGamer.ColorEncodeSeparator);
+                    string text = sepIndex >= 0 ? entry[..sepIndex] : entry;
+                    string colorHex = sepIndex >= 0 ? entry[(sepIndex + 1)..] : "FFFFFF";
+                    upperText += $" <color=#FFFFFF>&</color> <color=#{colorHex}>{text}</color>";
+                }
             }
             textRenderer.text = upperText + " " + endGameCondition.winText;
             __instance.BackgroundBar.material.SetColor("_Color", endGameCondition.UpperTextColor);
