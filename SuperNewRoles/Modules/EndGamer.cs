@@ -62,15 +62,21 @@ public static class EndGamer
         }
         HashSet<string> addWinners = new();
         List<string> hijackAddWinners = new();
-
         // サボタージュ勝ちの時はインポスター以外死んだ判定で判定していく
         if (reason == GameOverReason.ImpostorsBySabotage)
         {
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
             {
-                if (player.IsAlive())
+                if (!player.IsImpostorWinTeam())
+                {
+                    // IsDead = true にする前に、まだ生存していたプレイヤーの死因をサボタージュとして記録する。
+                    // ここで先に IsDead を立ててしまうと、後段の UpdatePlayerStatusForSabotage
+                    // （EndGameScene.cs）が「!player.IsDead」を条件にしているため発動せず、
+                    // 死因がサボタージュとして表示されなくなるバグがあった。
+                    if (player.IsAlive())
                         player.FinalStatus = FinalStatus.Sabotage;
                     player.Data.IsDead = true;
+                }
             }
         }
 
@@ -98,9 +104,15 @@ public static class EndGamer
         // FinalStatus（サボタージュ死亡等）はホストのローカル状態にしか反映されず、
         // 非ホストクライアントでは常に Alive のまま表示されてしまうバグがあった
         // （死因:サボタージュがホスト視点にしか表示されない）ため、同期する。
+        //
+        // 注意: Dictionary<byte, FinalStatus> は CustomRPC のシリアライズ対応型として
+        // 登録されていないため、そのまま渡すと RPC 送信自体が失敗し、
+        // このメソッド以降の処理（RpcEndGameWithCondition 含む）が一切実行されなくなる
+        // バグがあった（「全員敗北」「/winners で情報なし」の直接原因）。
+        // Dictionary<byte, byte> は対応済みのため、FinalStatus を byte にキャストして送る。
         RpcSyncFinalStatus(ExPlayerControl.ExPlayerControls
             .Where(x => x.FinalStatus != FinalStatus.Alive)
-            .ToDictionary(x => x.PlayerId, x => x.FinalStatus));
+            .ToDictionary(x => x.PlayerId, x => (byte)x.FinalStatus));
         string resolvedWinText = winText;
         // 単独勝利の場合、三人称単数になるので「wins」にする
         if (winType == WinType.SingleNeutral
@@ -123,6 +135,15 @@ public static class EndGamer
         {
             if (dead.TryGetValue(player.PlayerId, out bool isDead))
                 player.Data.IsDead = isDead;
+        }
+    }
+    [CustomRPC]
+    public static void RpcSyncFinalStatus(Dictionary<byte, byte> finalStatus)
+    {
+        foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
+        {
+            if (finalStatus.TryGetValue(player.PlayerId, out byte status))
+                player.FinalStatus = (FinalStatus)status;
         }
     }
     [CustomRPC]
@@ -193,20 +214,24 @@ public static class EndGamer
         // 「全員が最後にマッチした色になる」バグの両方を防ぐ。
         bool hasHijackWon = false;
 
-        void AddHijackWinner(ExPlayerControl player, string key, Color32 roleColor)
+        void AddHijackWinner(ExPlayerControl player, string key, Color32 roleColor, ref HashSet<ExPlayerControl> w, ref string uText, ref Color32 c, ref WinType wType)
         {
-            winners.Add(player);
             if (!hasHijackWon)
             {
-                upperText = key;
-                color = roleColor;
+                // 乗っ取り勝利が初めて成立した瞬間に、元の勝者（インポスター/クルーメイト等）を
+                // 全て消し去る。ここで w.Clear() を行わないと、神が乗っ取り勝利したはずなのに
+                // 元々勝つ予定だったインポスター陣営も一緒に勝者として表示され続けてしまうバグがあった。
+                w.Clear();
+                uText = key;
+                c = roleColor;
                 hasHijackWon = true;
             }
             else
             {
                 hijackAddWinners.Add(EncodeWithColor(key, roleColor));
             }
-            winType = WinType.Hijackers;
+            w.Add(player);
+            wType = WinType.Hijackers;
         }
 
         // === 神 ===
@@ -216,7 +241,7 @@ public static class EndGamer
             {
                 if (God.GodNeededTask && !player.IsTaskComplete()) continue;
                 reason = (GameOverReason)CustomGameOverReason.GodWin;
-                AddHijackWinner(player, "God", God.Instance.RoleColor);
+                AddHijackWinner(player, "God", God.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
                 if (winType == WinType.Hijackers) winText = "GodDescends";
             }
         }
@@ -229,7 +254,7 @@ public static class EndGamer
                 if (player.Role == RoleId.Tuna && player.IsAlive())
                 {
                     reason = (GameOverReason)CustomGameOverReason.TunaWin;
-                    AddHijackWinner(player, "Tuna", Tuna.Instance.RoleColor);
+                    AddHijackWinner(player, "Tuna", Tuna.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
                     winText = null;
                 }
             }
@@ -245,7 +270,7 @@ public static class EndGamer
             {
                 // CustomGameOverReasonにOrientalShamanWinは存在しないため、
                 // reasonは変更せず元の勝利理由(誰かがキル/追放された理由)のまま据え置く
-                AddHijackWinner(player, "OrientalShaman", OrientalShaman.Instance.RoleColor);
+                AddHijackWinner(player, "OrientalShaman", OrientalShaman.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
                 if (orientalShamanAbility._servant?.Player != null)
                     winners.Add(orientalShamanAbility._servant.Player);
                 winText = null;
@@ -261,7 +286,7 @@ public static class EndGamer
                 if (player.Role == RoleId.Spelunker && player.IsAlive())
                 {
                     reason = (GameOverReason)CustomGameOverReason.SpelunkerWin;
-                    AddHijackWinner(player, "Spelunker", Spelunker.Instance.RoleColor);
+                    AddHijackWinner(player, "Spelunker", Spelunker.Instance.RoleColor, ref winners, ref upperText, ref color, ref winType);
                     winText = null;
                 }
             }
