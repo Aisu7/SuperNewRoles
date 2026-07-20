@@ -170,7 +170,7 @@ public static class EndGamer
     private static void UpdateHijackers(ref GameOverReason reason, ref HashSet<ExPlayerControl> winners, ref Color32 color, ref string upperText, ref string winText, ref WinType winType, List<string> hijackAddWinners)
     {
         if (GameSettingOptions.DisableHijackTaskWin && reason == GameOverReason.CrewmatesByTask) return;
-        if (Tasker.DisableHijackTaskerWin && reason == GameOverReason.TaskerWin) return;
+        if (Tasker.DisableHijackTaskerWin && reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
 
         // 三匹の仔豚勝利（優先度: 最高・分岐なし）
         // 旧仕様:
