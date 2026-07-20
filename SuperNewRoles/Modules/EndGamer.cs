@@ -104,7 +104,7 @@ public static class EndGamer
         // FinalStatus（サボタージュ死亡等）はホストのローカル状態にしか反映されず、
         // 非ホストクライアントでは常に Alive のまま表示されてしまうバグがあった
         // （死因:サボタージュがホスト視点にしか表示されない）ため、同期する。
-        //
+        
         // 注意: Dictionary<byte, FinalStatus> は CustomRPC のシリアライズ対応型として
         // 登録されていないため、そのまま渡すと RPC 送信自体が失敗し、
         // このメソッド以降の処理（RpcEndGameWithCondition 含む）が一切実行されなくなる
@@ -170,11 +170,7 @@ public static class EndGamer
     private static void UpdateHijackers(ref GameOverReason reason, ref HashSet<ExPlayerControl> winners, ref Color32 color, ref string upperText, ref string winText, ref WinType winType, List<string> hijackAddWinners)
     {
         if (GameSettingOptions.DisableHijackTaskWin && reason == GameOverReason.CrewmatesByTask) return;
-
-        // タスカー（RoleId.Tasker）のタスク勝利は固定仕様として常に乗っ取り不可・乗っ取り側にもならない。
-        // Tasker.OnTaskComplete 側で CustomGameOverReason.TaskerWin を使って単独で終了させており、
-        // ここで検知した場合は UpdateHijackers 自体を完全にスキップする（乗っ取られもしないし、乗っ取りもしない）。
-        if (reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
+        if (Tasker.DisableHijackTaskerWin && reason == GameOverReason.TaskerByTask) return;
 
         // 三匹の仔豚勝利（優先度: 最高・分岐なし）
         // 旧仕様:
