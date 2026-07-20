@@ -82,7 +82,13 @@ public class TaskerAbility : AbilityBase
         if (data.player == null || data.player.PlayerId != Player.PlayerId) return;
         if (Player.IsDead() || !Player.IsTaskComplete()) return;
 
-        EndGamer.EndGameImpostorWin();
+        // CustomGameOverReason.TaskerWin があったので使用しました
+        EndGamer.RpcEndGameWithWinner(
+            CustomGameOverReason.TaskerWin,
+            WinType.Default,
+            ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToArray(),
+            Palette.ImpostorRed,
+            "ImpostorWin");
     }
 }
 
