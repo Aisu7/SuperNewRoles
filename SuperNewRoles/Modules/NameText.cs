@@ -222,7 +222,6 @@ public static class NameText
         DieEvent.Instance.AddListener(x => { if (x.player?.PlayerId == ExPlayerControl.LocalPlayer?.PlayerId) new LateTask(() => UpdateAllNameInfo(), 0.5f); });
         WrapUpEvent.Instance.AddListener(x => UpdateAllNameInfo());
         MeetingStartEvent.Instance.AddListener(x => UpdateAllNameInfo());
-        SaboEndEvent.Instance.AddListener(x => { if (x.saboType == SystemTypes.Comms) UpdateAllNameInfo(); });
         FixedUpdateEvent.Instance.AddListener(UpdateAllVisible);
         _lastDead = new();
     }
@@ -236,7 +235,12 @@ public static class NameText
         }
         public static void Postfix(HudOverrideSystemType __instance)
         {
-            if (__instance.IsActive && !_lastActive)
+            // 元々は非アクティブ→アクティブ（サボタージュ開始）のみ検知しており、
+            // アクティブ→非アクティブ（サボタージュ終了）には対応していなかった。
+            // そのため終了直後はタスク数表示が「?」のまま固まり、
+            // 別の更新契機（誰かのタスク完了・会議開始など）が偶然来るまで
+            // 反映されないバグがあった。開始と対称的に、終了時も更新する。
+            if (__instance.IsActive != _lastActive)
                 UpdateAllNameInfo();
         }
     }
