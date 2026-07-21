@@ -22,7 +22,30 @@ public enum WinType
     NoWinner
 }
 public static class EndGamer
-{
+{/*
+    public static void EndGame(GameOverReason reason)
+    {
+        List<ExPlayerControl> winners = new();
+        Color32 color = Color.white;
+        string upperText = null;
+        switch (reason)
+        {
+            case GameOverReason.ImpostorsByKill:
+            case GameOverReason.ImpostorsByVote:
+            case GameOverReason.ImpostorsBySabotage:
+                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToList();
+                color = Palette.ImpostorRed;
+                upperText = "ImpostorWin";
+                break;
+            case GameOverReason.CrewmatesByTask:
+            case GameOverReason.CrewmatesByVote:
+                winners = ExPlayerControl.ExPlayerControls.Where(x => x.IsCrewmate()).ToList();
+                color = Palette.CrewmateBlue;
+                upperText = "CrewmateWin";
+                break;
+        }
+        EndGame(reason, winners, color, upperText);
+    }*/
     // additionalWinTexts の1要素に「翻訳キー」と「表示色」を両方載せるためのエンコード区切り文字。
     // [CustomRPC] は List<string> しか安全に運べないため、
     // "翻訳キー\x1FRRGGBB" の形式に文字列エンコードして EndGameScene.cs 側でデコードする。
@@ -114,15 +137,17 @@ public static class EndGamer
         if (!AmongUsClient.Instance.AmHost) return;
         EndGame(GameOverReason.ImpostorsByKill, WinType.Default, ExPlayerControl.ExPlayerControls.Where(x => x.IsImpostorWinTeam()).ToHashSet(), Palette.ImpostorRed, "ImpostorWin");
     }
-
     private static void UpdateHijackers(ref GameOverReason reason, ref HashSet<ExPlayerControl> winners, ref Color32 color, ref string upperText, ref string winText, ref WinType winType, List<string> hijackAddWinners)
     {
         if (GameSettingOptions.DisableHijackTaskWin && reason == GameOverReason.CrewmatesByTask) return;
-
-        // タスカーのタスク勝利は DisableHijackTaskerWin 設定時、乗っ取り不可・乗っ取り側にもならない。
         if (Tasker.DisableHijackTaskerWin && reason == (GameOverReason)CustomGameOverReason.TaskerWin) return;
 
-        // 三匹の仔豚勝利（優先度: 最高・分岐なし）
+        // ========================= 優先度(最高) =========================
+        // 三匹の仔豚勝利
+        // 旧仕様:
+        // - チーム全員が生存していれば勝利
+        // - そうでなくても、生存キラー(インポスター/ジャッカル/その他キラー)が全滅していれば勝利
+        // - 同時勝利は禁止
         foreach (var team in Roles.Neutral.TheThreeLittlePigs.Teams)
         {
             if (team == null || team.Count != 3) continue;
@@ -148,10 +173,8 @@ public static class EndGamer
             }
         }
 
-        // ==================================================
-        // 条件付き生存横取り勝利（優先度: 高）— Moira / Frankenstein
-        // 互いに同時勝利可能。どちらか成立したら return。
-        // ==================================================
+        // ======================= 優先度(高) ===========================
+        // 条件付き生存横取り勝利 — モイラ / フランケンシュタイン
         bool hasConditionalWon = false;
         void AddConditionalWinner(ExPlayerControl player, string key, CustomGameOverReason customReason, Color32 roleColor)
         {
@@ -188,10 +211,8 @@ public static class EndGamer
         }
         if (hasConditionalWon) return;
 
-        // ==================================================
-        // 単純生存横取り勝利（優先度: 中〜低）— マグロ / 陰陽師 / スペランカー / 神
-        // 神を除き同時勝利可能。神は他の誰も乗っ取っていない場合のみ勝つため最後に判定する。
-        // ==================================================
+        // ========================= 優先度(中) =========================
+        // 単純生存横取り勝利 - マグロ / 陰陽師 / スペランカー
         bool hasHijackWon = false;
         void AddHijackWinner(ExPlayerControl player, string key, CustomGameOverReason customReason, Color32 roleColor)
         {
@@ -214,7 +235,7 @@ public static class EndGamer
             winType = WinType.Hijackers;
         }
 
-        // === スペランカー ===
+        // スペランカー
         if (!Spelunker.SpelunkerIsAdditionalWin)
         {
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
@@ -224,7 +245,7 @@ public static class EndGamer
             }
         }
 
-        // === マグロ ===
+        // マグロ
         if (Tuna.EnableTunaSoloWin)
         {
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
@@ -234,7 +255,8 @@ public static class EndGamer
             }
         }
 
-        // === 陰陽師（式神も同時勝利するため専用処理のまま。通常1ゲーム1人のためbreakのまま）===
+        // 陰陽師 / 式神
+        // CustomGameOverReason.OrientalShamanWinを追加
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role != RoleId.OrientalShaman || player.IsDead()) continue;
@@ -248,7 +270,8 @@ public static class EndGamer
             }
         }
 
-        // === 神（優先度最下位。他の誰も乗っ取っていなければ勝つ）===
+        // ========================= 優先度(低) =========================
+        // 神
         if (!hasHijackWon)
         {
             foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
