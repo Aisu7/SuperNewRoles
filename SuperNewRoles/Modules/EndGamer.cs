@@ -212,7 +212,7 @@ public static class EndGamer
         if (hasConditionalWon) return;
 
         // ========================= 優先度(中) =========================
-        // 単純生存横取り勝利 - マグロ / 陰陽師 / スペランカー
+        // 単純生存横取り勝利 - スペランカー / マグロ / 陰陽師
         bool hasHijackWon = false;
         void AddHijackWinner(ExPlayerControl player, string key, CustomGameOverReason customReason, Color32 roleColor)
         {
@@ -257,6 +257,9 @@ public static class EndGamer
 
         // 陰陽師 / 式神
         // CustomGameOverReason.OrientalShamanWinを追加
+        // break を入れていたため、陰陽師が複数人いる場合に最初の1人しか
+        // 判定されず勝利できないバグがあった。スペランカー/マグロと同様、
+        // 全員を判定して条件を満たした陰陽師は全員勝利できるようにする。
         foreach (ExPlayerControl player in ExPlayerControl.ExPlayerControls)
         {
             if (player.Role != RoleId.OrientalShaman || player.IsDead()) continue;
@@ -266,7 +269,6 @@ public static class EndGamer
                 AddHijackWinner(player, "OrientalShaman", CustomGameOverReason.OrientalShamanWin, OrientalShaman.Instance.RoleColor);
                 if (orientalShamanAbility._servant?.Player != null)
                     winners.Add(orientalShamanAbility._servant.Player);
-                break;
             }
         }
 
