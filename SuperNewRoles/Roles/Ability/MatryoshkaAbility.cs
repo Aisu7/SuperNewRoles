@@ -38,6 +38,15 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
     private int Counter = 0;
     // 着用前の自分のカラーIDを保存（setOutfitがDefaultOutfitを上書きするため着用時に事前保存が必要）
     private int _originalColorId = -1;
+    // SetHat/SetVisor は Hats[Default]/Visors[Default] を直接上書きするため、
+    // 着用中にこの辞書エントリが死体側のコスメで上書きされてしまう。
+    // FinishShapeshift() は Hats[Default] を再参照するだけで新しいデータを設定しないため、
+    // このまま脱ぐと本人のコスメには戻らず、死体のコスメが残ったままになる。
+    // 着用前に本人の実データを退避しておき、脱ぐ際に直接書き戻す。
+    private ICosmeticData _originalHat1Data;
+    private ICosmeticData _originalHat2Data;
+    private ICosmeticData _originalVisor1Data;
+    private ICosmeticData _originalVisor2Data;
 
     private CustomKillButtonAbility customKillButtonAbility;
 
@@ -195,14 +204,40 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
             // バニラ見た目を元に戻す
             source.Player.Player.setOutfit(source.Player.Data.DefaultOutfit);
 
-            // カスタムコスメティクス4層を Default に戻す
+            // カスタムコスメティクス4層を Default に戻す。
+            // 着用中に Hats[Default]/Visors[Default] が死体のコスメで上書きされているため、
+            // FinishShapeshift の前に退避しておいた本人の実データを直接書き戻す。
             var layer = CustomCosmeticsLayers.ExistsOrInitialize(source.Player.Player.cosmetics);
-            if (layer.hat1 != null) { layer.hat1.gameObject.SetActive(true); layer.hat1.FinishShapeshift(restoreColorId); }
-            if (layer.hat2 != null) { layer.hat2.gameObject.SetActive(true); layer.hat2.FinishShapeshift(restoreColorId); }
-            if (layer.visor1 != null) { layer.visor1.gameObject.SetActive(true); layer.visor1.FinishShapeshift(restoreColorId); }
-            if (layer.visor2 != null) { layer.visor2.gameObject.SetActive(true); layer.visor2.FinishShapeshift(restoreColorId); }
+            if (layer.hat1 != null)
+            {
+                layer.hat1.gameObject.SetActive(true);
+                if (source._originalHat1Data != null) layer.hat1.Hats[CustomOutfitType.Default] = source._originalHat1Data;
+                layer.hat1.FinishShapeshift(restoreColorId);
+            }
+            if (layer.hat2 != null)
+            {
+                layer.hat2.gameObject.SetActive(true);
+                if (source._originalHat2Data != null) layer.hat2.Hats[CustomOutfitType.Default] = source._originalHat2Data;
+                layer.hat2.FinishShapeshift(restoreColorId);
+            }
+            if (layer.visor1 != null)
+            {
+                layer.visor1.gameObject.SetActive(true);
+                if (source._originalVisor1Data != null) layer.visor1.Visors[CustomOutfitType.Default] = source._originalVisor1Data;
+                layer.visor1.FinishShapeshift(restoreColorId);
+            }
+            if (layer.visor2 != null)
+            {
+                layer.visor2.gameObject.SetActive(true);
+                if (source._originalVisor2Data != null) layer.visor2.Visors[CustomOutfitType.Default] = source._originalVisor2Data;
+                layer.visor2.FinishShapeshift(restoreColorId);
+            }
 
             source._originalColorId = -1;
+            source._originalHat1Data = null;
+            source._originalHat2Data = null;
+            source._originalVisor1Data = null;
+            source._originalVisor2Data = null;
 
             // 死体を報告可能に戻す
             deadBody.Reported = false;
@@ -244,6 +279,14 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
             // setOutfit は DefaultOutfit を上書きするため、先に自分の色を保存する
             source._originalColorId = source.Player.Data.DefaultOutfit.ColorId;
 
+            // SetHat/SetVisor が Hats[Default]/Visors[Default] を破壊する前に、
+            // 本人の実データ（ICosmeticDataオブジェクト）を退避しておく
+            var sourceLayerForBackup = CustomCosmeticsLayers.ExistsOrInitialize(source.Player.Player.cosmetics);
+            source._originalHat1Data = sourceLayerForBackup.hat1?.DefaultHat;
+            source._originalHat2Data = sourceLayerForBackup.hat2?.DefaultHat;
+            source._originalVisor1Data = sourceLayerForBackup.visor1?.DefaultVisor;
+            source._originalVisor2Data = sourceLayerForBackup.visor2?.DefaultVisor;
+
             // バニラ見た目を死体の人に合わせる
             source.Player.Player.setOutfit(target.Data.DefaultOutfit);
 
@@ -255,13 +298,13 @@ public class MatryoshkaAbility : CustomButtonBase, IButtonEffect, IAbilityCount
             int targetColorId = target.Data.DefaultOutfit.ColorId;
 
             if (sourceLayer.hat1 != null)
-                sourceLayer.hat1.SetShapeshiftHat(targetLayer.hat1?.DefaultHat?.ProdId ?? HatData.EmptyId, targetColorId);
+                sourceLayer.hat1.SetHat(targetLayer.hat1?.DefaultHat?.ProdId ?? HatData.EmptyId, targetColorId);
             if (sourceLayer.hat2 != null)
-                sourceLayer.hat2.SetShapeshiftHat(targetLayer.hat2?.DefaultHat?.ProdId ?? HatData.EmptyId, targetColorId);
+                sourceLayer.hat2.SetHat(targetLayer.hat2?.DefaultHat?.ProdId ?? HatData.EmptyId, targetColorId);
             if (sourceLayer.visor1 != null)
-                sourceLayer.visor1.SetShapeshiftVisor(targetLayer.visor1?.DefaultVisor?.ProdId ?? VisorData.EmptyId, targetColorId);
+                sourceLayer.visor1.SetVisor(targetLayer.visor1?.DefaultVisor?.ProdId ?? VisorData.EmptyId, targetColorId);
             if (sourceLayer.visor2 != null)
-                sourceLayer.visor2.SetShapeshiftVisor(targetLayer.visor2?.DefaultVisor?.ProdId ?? VisorData.EmptyId, targetColorId);
+                sourceLayer.visor2.SetVisor(targetLayer.visor2?.DefaultVisor?.ProdId ?? VisorData.EmptyId, targetColorId);
 
             // 報告不可能にする
             targetBody.Reported = !source.Data.WearReport;
