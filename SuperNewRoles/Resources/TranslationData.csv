@@ -157,6 +157,7 @@ ExcludeSubmitScanTaskFromSelection,クルーメイトスキャンタスクを選
 RandomizeFixLightsSwitches,停電修理の初期状態を完全にランダムにする,Fully randomize lights repair switches,完全随机化修灯开关,完全隨機化修燈開關
 SyncSpawn,スポーンを同期する(選択スポーンのみ),Sync Spawn (Selected Spawn Only),同步出生点(仅选择出生点),同步出生點(僅選擇出生點)
 AdvancedRandom,よりランダムな乱数を使用する,Use Enhanced Randomness,使用增强型随机数,使用更隨機的隨機數
+ReduceRoleAssignmentBias,役職選出の偏りを軽減する,Reduce Perceived Role Assignment Bias,减少角色分配的体感偏差,降低角色分配的體感偏差
 DisableTaskWin,タスク勝利を無効にする,Disable task victory,禁用任务胜利,禁用任務勝利
 DisableHijackTaskWin,第三陣営のタスク勝利横取りを無効にする,Disable hijack task victory by third party,禁用中立阵营抢夺任务胜利,禁用中立陣營搶奪任務勝利
 HideGhostRoles,死亡時に他クルーの役職を表示しない,Hide Crew Roles on Death,死亡时隐藏船员职业,死亡時隱藏船員職業
@@ -169,9 +170,11 @@ ChangeReportDistance,レポート距離を変更する,Change report distance,�
 ReportDistanceOption,レポート距離,Report distance,报告距离,報告距離
 IsLimitEmergencyMeeting,緊急会議を使用できる回数を制限する,Limit emergency meeting uses,限制紧急会议召开次数,限制緊急會議召集次數
 EmergencyMeetingLimitCount,緊急会議 全体使用可能回数,Emergency meeting total uses,全体紧急会议最大召开次数,緊急會議總使用次數
+UnlimitedEmergencyMeetings,緊急会議ボタンを無制限にする,Allow unlimited emergency meeting button uses,允许无限使用紧急会议按钮,允許無限使用緊急會議按鈕
 MeetingStatusPersonalEmergencyCount,クルー {0} が持つ 緊急会議残り {1} 回,Crewmember {0} has {1} emergency meetings left,玩家 {0} 剩余 {1} 次紧急会议,船員 {0} 剩餘 {1} 次緊急會議
 MeetingStatusAllEmergencyCount,クルー全体が持つ 緊急会議残り {0} 回,All crewmembers have {0} emergency meetings left,全体玩家剩余 {0} 次紧急会议,全體船員剩餘 {0} 次緊急會議
 MeetingStatusUpperLimitReached,緊急会議は\n全体の使用可能回数に達した,Emergency meetings cannot be used\nbecause the total limit was reached,紧急会议次数已用尽\n无法召开,達到上限\n緊急會議無法召開
+MeetingStatusUnlimitedEmergencyMeetings,緊急会議ボタンを無制限に使用可能,Emergency meeting button uses are unlimited,紧急会议按钮可无限使用,緊急會議按鈕可無限使用
 CustomAprilFools,エイプリルフールを有効にする,Enabled aprilfools,启用愚人节模式,啟用愚人節模式
 AprilFoolsOutfitType,姿,Outfit type,外观类型,外觀類型
 AprilFoolsOutfitType.None,なし,None,无变化,無變化
@@ -398,6 +401,8 @@ ExclusivityEditMenuTitle,排他設定の編集,Edit Exclusivity Settings,编辑�
 ExclusivityEditMenuGroupTitle,グループ {0}の設定,Group {0} Settings,分组 {0} 设置,組 {0} 設置
 DebugMode,デバッグモード,Debug Mode,测试模式,偵錯模式
 DebugModeNoGameEnd,ゲームを終了しない,No game end,游戏不结束,遊戲不結束
+NoGameEndHudText,ゲームを終了しない,No game end,游戏不结束,遊戲不結束
+NoGameEndUnlimitedEmergencyMeetings,緊急会議ボタンを無制限にする,Allow unlimited emergency meeting button uses,允许无限使用紧急会议按钮,允許無限使用緊急會議按鈕
 CustomOptionTask_Short,ショートタスク,Short Tasks,短任务,短任務
 CustomOptionTask_Long,ロングタスク,Long Tasks,长任务,長任務
 CustomOptionTask_Common,通常タスク,Common Tasks,共同任务,共同任務
@@ -503,7 +508,7 @@ Samurai,侍,Samurai,侍卫,侍
 WaveCannon,波動砲,Wave Cannon,重炮手,重炮手
 WaveCannonJackal,波動砲ジャッカル,Wave Cannon Jackal,豺狼重炮手,豺狼重炮手
 Tuna,マグロ,Tuna,金枪鱼,金槍魚
-Teruteru,てるてる,Teruteru,晴天娃娃,晴天娃娃
+Teruteru,てるてる,Jester,晴天娃娃,晴天娃娃
 Opportunist,オポチュニスト,Opportunist,投机者,機會主義者
 Chief,村長,Chief,村长,村長
 Workperson,仕事人,Workperson,打工人,打工人
@@ -2218,3 +2223,17 @@ OrpheusRitualCorpseReportDistancePercent,儀式死体の通報距離倍率,Ritua
 CleanerCoolTime,死体消しのクールダウン,Corpse Cleaner Cooldown,尸体清理冷却时间,屍體清理冷卻時間
 MadCleanerCoolTime,死体消しのクールダウン,Corpse Cleaner Cooldown,尸体清理冷却时间,屍體清理冷卻時間
 CleanerButton,死体を消す!,Clean the corpse!,清理尸体！,清理屍體！
+
+# HomeSecurityGuard
+HomeSecurityGuardTask1,自宅を警備する,Guard the home,守卫家庭,警備家園
+HomeSecurityGuardTask2,ゴロゴロする,Laze around,闲逛,躺平
+HomeSecurityGuardTask3,お菓子を食べる,Eat snacks,吃零食,吃零食
+HomeSecurityGuardTask4,テレビを見る,Watch TV,看电视,看電視
+HomeSecurityGuardTask5,ゲームをする,Play games,玩游戏,打遊戲
+HomeSecurityGuardTask6,ひなたぼっこする,Sunbathe,晒太阳,曬太陽
+HomeSecurityGuardTask7,玄関を見張る,Watch the entrance,盯着门口,盯著玄關
+HomeSecurityGuardTask8,不審者をチェックする,Check for suspicious people,排查可疑人员,排查可疑人士
+HomeSecurityGuardTask9,居眠りする,Doze off,打瞌睡,打瞌睡
+HomeSecurityGuardTask10,スマホをいじる,Fiddle with phone,玩手机,滑手機
+HomeSecurityGuardTask11,ネット巡回をする,Browse the internet,网上冲浪,網路巡邏
+HomeSecurityGuardTask12,配達物を確認する,Check deliveries,检查快递,確認包裹
