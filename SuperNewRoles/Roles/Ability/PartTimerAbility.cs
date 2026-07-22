@@ -110,14 +110,23 @@ public class PartTimerAbility : TargetCustomButtonBase
     private void OnWrapUp(WrapUpEventData data)
     {
         if (Player != ExPlayerControl.LocalPlayer) return;
-        if (!Player.IsAlive()) return;
 
-        // 雇用主の生死チェック（会議終了後のみ）
+        // 雇用主の生死チェックは、フリーター自身が死んでいても行う。
+        // フリーター自身の生存チェック（!Player.IsAlive()）で早期returnしてしまうと、
+        // フリーターが死亡した後は Employer が二度とリセットされず、
+        // 雇用主が死んでいても ■ マークが表示され続けるバグがあった。
         if (Employer != null && Employer.IsDead())
         {
-            Employer = null;
+            // ローカルの状態変更だけでなく、ホストにも同期する
+            // （フリーター自身がホストでない場合、ホスト側の _employer は
+            //   RpcEmploy で設定された値のまま更新されず、EndGame実行時に
+            //   古い（死亡した）雇用主の情報を見てしまうバグがあった）
+            RpcResetEmployer();
             _deathTurn = _data.deathTurn + 1; // DeathTurnをリセット
         }
+
+        // 以降の処理（自殺判定・DeathTurn減少）はフリーター自身が生きている場合のみ
+        if (!Player.IsAlive()) return;
 
         // 無職状態の場合、DeathTurnを減らす
         if (!_isEmployed)
@@ -170,6 +179,17 @@ public class PartTimerAbility : TargetCustomButtonBase
         Employer = employer;
         NameText.UpdateNameInfo(Player);
         NameText.UpdateNameInfo(employer);
+    }
+
+    [CustomRPC]
+    public void RpcResetEmployer()
+    {
+        // 雇用主死亡による解雇をホストを含む全クライアントに同期する
+        var previousEmployer = Employer;
+        Employer = null;
+        NameText.UpdateNameInfo(Player);
+        if (previousEmployer != null)
+            NameText.UpdateNameInfo(previousEmployer);
     }
 
     public override Func<ExPlayerControl, bool> IsTargetable => (target) =>

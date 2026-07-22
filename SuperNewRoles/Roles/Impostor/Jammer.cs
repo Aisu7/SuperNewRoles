@@ -7,7 +7,9 @@ using SuperNewRoles.Modules;
 using SuperNewRoles.Roles.Ability;
 using SuperNewRoles.Roles.Ability.CustomButton;
 using SuperNewRoles.Events;
+using SuperNewRoles.Events.PCEvents;
 using SuperNewRoles.Modules.Events.Bases;
+using HarmonyLib;
 
 namespace SuperNewRoles.Roles.Impostor;
 
@@ -55,6 +57,7 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
     private int _usedCount;
     private ExPlayerControl _invisibleTarget;
     private EventListener<MeetingStartEventData> _onMeetingStart;
+    private EventListener<DieEventData> _onDie;
     private EventListener _onFixedUpdate;
     private readonly OpacityFadeController _opacityFader = new();
 
@@ -70,6 +73,11 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
         }
     };
     public bool effectCancellable => true;
+
+    // バニラの PlayerControl.SetHatAndVisorAlpha が任意のタイミングで呼ばれ、
+    // バイザー(とハット)のアルファ値を上書きしてしまう問題への対策。
+    // 現在ジャマーで非表示中の対象を登録しておき、上書きされた直後に再適用する。
+    private static readonly Dictionary<byte, JammerAbility> _jammedTargets = new();
 
     public override Color32 OutlineColor => Color.red;
     public override Sprite Sprite => AssetManager.GetAsset<Sprite>("JammerButton.png");
@@ -129,6 +137,7 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
     {
         base.AttachToLocalPlayer();
         _onMeetingStart = MeetingStartEvent.Instance.AddListener(OnMeetingStart);
+        _onDie = DieEvent.Instance.AddListener(OnDie);
     }
 
     public override void DetachToLocalPlayer()
@@ -141,6 +150,17 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
             _invisibleTarget = null;
         }
         _onMeetingStart?.RemoveListener();
+        _onDie?.RemoveListener();
+    }
+
+    private void OnDie(DieEventData data)
+    {
+        // ジャマー対象が死亡した場合もレジストリから外す
+        // (バニラの SetHatAndVisorAlpha が死亡後の表示処理で呼ばれても干渉しないようにする)
+        if (_invisibleTarget != null && data.player == _invisibleTarget)
+        {
+            _jammedTargets.Remove(_invisibleTarget.PlayerId);
+        }
     }
 
     private void OnMeetingStart(MeetingStartEventData data)
@@ -170,10 +190,12 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
     {
         if (isInvisible)
         {
+            _jammedTargets[target.PlayerId] = this;
             _opacityFader.Apply(target, CanSeeTranslucentState(target, out var opacity) ? opacity : 0f);
         }
         else
         {
+            _jammedTargets.Remove(target.PlayerId);
             _opacityFader.Apply(target, 1f);
         }
     }
@@ -192,5 +214,43 @@ public class JammerAbility : TargetCustomButtonBase, IButtonEffect
         }
         opacity = 0f;
         return false;
+    }
+
+    // バニラの PlayerControl.SetHatAndVisorAlpha は、近くの障害物や暗所などの判定により
+    // 任意のタイミングで呼び出され、バイザー(及びハット)のアルファ値を直接上書きしてしまう。
+    // このため OpacityFadeController で一度フェードさせても、直後にバニラ側の処理で
+    // 不透明(アルファ1)へ戻され、「バイザーだけ消えずに残る」症状が発生していた。
+    // 対象がジャマーで非表示中であれば、上書きされた直後に再度ジャマーの不透明度を
+    // 強制適用することで対処する。
+    [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.SetHatAndVisorAlpha))]
+    public static class SetHatAndVisorAlphaPatch
+    {
+        public static void Postfix(PlayerControl __instance)
+        {
+            if (__instance == null) return;
+            if (!_jammedTargets.TryGetValue(__instance.PlayerId, out var ability)) return;
+
+            ExPlayerControl target = __instance;
+            if (target == null || target.IsDead())
+            {
+                _jammedTargets.Remove(__instance.PlayerId);
+                return;
+            }
+
+            float opacity = ability.CanSeeTranslucentState(target, out var op) ? op : 0f;
+            ModHelpers.SetOpacity(__instance, opacity);
+        }
+    }
+
+    // ゲーム開始時に静的辞書をリセットする。
+    // static フィールドはゲームをまたいで持続するため、前のセッションの
+    // エントリが次のゲームで同じ PlayerId の別プレイヤーに誤適用されるのを防ぐ。
+    [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.CoStartGame))]
+    public static class JammerCoStartGamePatch
+    {
+        public static void Postfix()
+        {
+            _jammedTargets.Clear();
+        }
     }
 }

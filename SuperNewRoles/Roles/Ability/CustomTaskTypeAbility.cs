@@ -80,12 +80,24 @@ public static class CustomTaskTypePatches
 
             if (!customTaskTypeAbility.ShouldChangeTask()) return;
 
+            // Console.CanUse の正しいシグネチャ:
+            // float CanUse(NetworkedPlayerInfo, out bool canUse, out bool couldUse)
+            // 誤って PlayerControl.Data（型が異なる）を渡すとビルドエラーになる
             __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
             if (!canUse) return;
 
             PlayerTask task = __instance.FindTask(PlayerControl.LocalPlayer);
+            if (task == null) return;
             if (task.TaskType is TaskTypes.FixLights or TaskTypes.RestoreOxy or TaskTypes.ResetReactor or
                 TaskTypes.ResetSeismic or TaskTypes.FixComms or TaskTypes.StopCharles or TaskTypes.MushroomMixupSabotage)
+                return;
+
+            // FixWeatherNode（気象ノード）は Weather1Game → WeatherSwitchGame という
+            // 2ステージ構成の多段階タスクであり、NormalPlayerTask.TaskStep でどちらの
+            // ステージかを判別できる。単純に MinigamePrefab を1つだけ差し替えると
+            // ステージ2側で状態が壊れる（差し替わらない・元に戻らない）ため、
+            // ステージ1（迷路パート、TaskStep == 0）でのみ差し替えを行う。
+            if (task.TaskType == TaskTypes.FixWeatherNode && task is NormalPlayerTask normalTask && normalTask.TaskStep != 0)
                 return;
 
             preMinigame = task.MinigamePrefab;

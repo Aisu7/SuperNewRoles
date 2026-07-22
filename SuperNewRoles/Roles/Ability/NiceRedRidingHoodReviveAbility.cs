@@ -67,8 +67,13 @@ public class NiceRedRidingHoodReviveAbility : AbilityBase, IAbilityCount
     private void OnWrapUpEvent(WrapUpEventData data)
     {
         if (!IsRevivable || Player.IsAlive() || Killer == null) return;
-        // 追放者がキラーの場合、復活判定
-        if (data.exiled != null && data.exiled == Killer)
+
+        // data.exiled は NetworkedPlayerInfo 型。
+        // Killer は ExPlayerControl 型で、そのまま == 比較すると参照比較になり
+        // 常に false を返してしまう（追放されても復活しないバグの原因）。
+        // 明示的に ExPlayerControl へキャストして PlayerId で比較する。
+        ExPlayerControl exiledPlayer = data.exiled;
+        if (exiledPlayer != null && exiledPlayer.PlayerId == Killer.PlayerId)
         {
             Logger.Info($"復活判定(キル者追放) : 可", "NiceRedRidingHood");
             Revive();

@@ -25,16 +25,24 @@ public class WCSantaHandler : MonoBehaviour
     private WaveCannonAbility _ability;
     private ExPlayerControl _source;
     private bool _friendlyFire;
+    // 発射時点の向きをインスタンスに保持する。
+    // 複数の波動砲(別プレイヤーや連射)が同時に飛行中の場合、static な IsFlipX を
+    // そのまま毎フレーム参照すると、後から発射された別の波動砲によって
+    // 既に飛行中のサンタの向きまで巻き込まれて変わってしまう。
+    private bool _isFlipX;
     private readonly HashSet<byte> _alreadyKilled = new();
 
     /// <summary>
     /// サンタが撃ち終わり後も死亡判定を継続するために、発射者情報を保持する。
+    /// isFlipX は呼び出し側でスナップショットされた値を渡すこと
+    /// （static な WCSantaHandler.IsFlipX を直接参照すると、他の発射に巻き込まれる危険があるため）。
     /// </summary>
-    public void Init(WaveCannonAbility ability)
+    public void Init(WaveCannonAbility ability, bool isFlipX)
     {
         _ability = ability;
         _source = ability?.Player;
         _friendlyFire = ability?.friendlyFire ?? true;
+        _isFlipX = isFlipX;
     }
 
     public void Start()
@@ -48,10 +56,14 @@ public class WCSantaHandler : MonoBehaviour
 
     public void Update()
     {
-        int flip = transform.parent == null && IsFlipX ? -1 : 1;
+        int flip = transform.parent == null && _isFlipX ? -1 : 1;
         if (transform.localScale.y < 0.725f)
             transform.localScale += new Vector3(flip * -0.05f, 0.05f, 0.05f);
 
+        // 移動方向は出現アニメ(flip)と符号が逆になる必要がある。
+        // 砲台本体(_gameObject)は localScale.x = isFlipX?-1:1 で正しく向きを表現しているが、
+        // サンタは親子付けされていないため、移動はここで独自に符号を持つ必要があった。
+        // 従来は flip をそのまま使っていたため、移動方向が砲台の向きと逆になっていた。
         transform.localPosition += new Vector3(flip * SantaSpeed * Time.deltaTime, 0, 0);
 
         // 撃ち終わり(Detach)後もサンタ自体が死亡判定を持ち続ける

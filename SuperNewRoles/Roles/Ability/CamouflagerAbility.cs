@@ -24,6 +24,7 @@ public class CamouflagerAbility : AbilityBase
     public bool _isCamouflaged { get; private set; }
 
     private EventListener<MeetingStartEventData> _meetingStartListener;
+    private EventListener<WrapUpEventData> _wrapUpListener;
 
     public CamouflagerAbility(CamouflagerAbilityOption option)
     {
@@ -39,6 +40,7 @@ public class CamouflagerAbility : AbilityBase
 
         _camouflageButtonAbility = new CamouflageButtonAbility(CoolTime, DurationTime, this);
         _meetingStartListener = MeetingStartEvent.Instance.AddListener(OnMeetingStart);
+        _wrapUpListener = WrapUpEvent.Instance.AddListener(OnWrapUp);
         Player.AttachAbility(_camouflageButtonAbility, new AbilityParentAbility(this));
     }
 
@@ -47,11 +49,57 @@ public class CamouflagerAbility : AbilityBase
         EndCamouflage();
     }
 
+    public void OnWrapUp(WrapUpEventData data)
+    {
+        // 会議中にカモフラが終了した場合、会議明けに元の外見に戻す
+        // MeetingStartEvent で EndCamouflage() を呼ぶが、
+        // 会議明けの WrapUp でも元の外見が正しく反映されるよう再適用する
+        if (_isCamouflaged) return; // まだカモフラ中なら何もしない
+        if (_originalOutfits.Count == 0) return; // 既に復元済みなら何もしない
+
+        // 会議前にカモフラ終了した = _originalOutfits に元データが残っている場合のみ復元
+        foreach (var player in PlayerControl.AllPlayerControls)
+        {
+            if (player == null || player.Data.Disconnected) continue;
+            if (!_originalOutfits.ContainsKey(player.PlayerId)) continue;
+
+            var originalOutfit = _originalOutfits[player.PlayerId];
+            var outfit = new NetworkedPlayerInfo.PlayerOutfit
+            {
+                PlayerName = originalOutfit.PlayerName,
+                ColorId = originalOutfit.ColorId,
+                SkinId = originalOutfit.SkinId,
+                HatId = originalOutfit.Hat2Id, // バニラのハットは hat2 に対応するため Hat2Id を使用
+                VisorId = originalOutfit.Visor2Id, // バニラのバイザーは visor2 に対応するため Visor2Id を使用
+                PetId = originalOutfit.PetId
+            };
+            player.setOutfit(outfit);
+
+            CustomCosmeticsLayer layer = CustomCosmeticsLayers.ExistsOrInitialize(player.cosmetics);
+            layer.hat1.gameObject.SetActive(true);
+            if (originalOutfit.Hat1Data != null)
+                layer.hat1.Hats[CustomOutfitType.Default] = originalOutfit.Hat1Data;
+            layer.hat1.FinishShapeshift(originalOutfit.ColorId);
+
+            layer.visor1.gameObject.SetActive(true);
+            if (originalOutfit.Visor1Data != null)
+                layer.visor1.Visors[CustomOutfitType.Default] = originalOutfit.Visor1Data;
+            layer.visor1.FinishShapeshift(originalOutfit.ColorId);
+
+            layer.hat2.gameObject.SetActive(true);
+            layer.hat2.FinishShapeshift(originalOutfit.ColorId);
+            layer.visor2.gameObject.SetActive(true);
+            layer.visor2.FinishShapeshift(originalOutfit.ColorId);
+        }
+        _originalOutfits.Clear();
+    }
+
     public override void DetachToAlls()
     {
         EndCamouflage();
         base.DetachToAlls();
         _meetingStartListener?.RemoveListener();
+        _wrapUpListener?.RemoveListener();
     }
 
     [CustomRPC]
@@ -89,7 +137,10 @@ public class CamouflagerAbility : AbilityBase
                 Hat2Id = layer.hat2?.DefaultHat?.ProdId ?? "ERROR",
                 Visor1Id = layer.visor1?.DefaultVisor?.ProdId ?? "ERROR",
                 Visor2Id = layer.visor2?.DefaultVisor?.ProdId ?? "ERROR",
-                PetId = player.Data.DefaultOutfit.PetId
+                PetId = player.Data.DefaultOutfit.PetId,
+                // setOutfit による Hats[Default] 破壊から守るため、実データも直接退避する
+                Hat1Data = layer.hat1?.DefaultHat,
+                Visor1Data = layer.visor1?.DefaultVisor
             };
         }
 
@@ -122,8 +173,14 @@ public class CamouflagerAbility : AbilityBase
             player.setOutfit(camouflageOutfit);
 
             CustomCosmeticsLayer layer = CustomCosmeticsLayers.ExistsOrInitialize(player.cosmetics);
-            layer.visor2.StartCamouflage(camouflageOutfit.ColorId);
-            layer.hat2.StartCamouflage(camouflageOutfit.ColorId);
+            // hat1/visor1 は StartCamouflage で EmptyHat に差し替え（正常に隠れる）
+            layer.hat1.StartCamouflage(camouflageOutfit.ColorId);
+            layer.visor1.StartCamouflage(camouflageOutfit.ColorId);
+            // hat2/visor2 は LateUpdate() が毎フレーム sprite と FlipX を上書きするため
+            // StartCamouflage を呼んでも虹色・向き固定になってしまう。
+            // SetActive(false) で物理的に非表示にすることで LateUpdate の影響を回避する。
+            layer.hat2.gameObject.SetActive(false);
+            layer.visor2.gameObject.SetActive(false);
         }
     }
 
@@ -173,14 +230,30 @@ public class CamouflagerAbility : AbilityBase
                 PlayerName = originalOutfit.PlayerName,
                 ColorId = originalOutfit.ColorId,
                 SkinId = originalOutfit.SkinId,
-                HatId = originalOutfit.Hat1Id,
-                VisorId = originalOutfit.Visor1Id,
+                HatId = originalOutfit.Hat2Id, // バニラのハットは hat2 に対応するため Hat2Id を使用
+                VisorId = originalOutfit.Visor2Id, // バニラのバイザーは visor2 に対応するため Visor2Id を使用
                 PetId = originalOutfit.PetId
             };
 
             player.setOutfit(outfit);
 
             CustomCosmeticsLayer layer = CustomCosmeticsLayers.ExistsOrInitialize(player.cosmetics);
+
+            // hat1/visor1: setOutfit(HatId="")が Hats[Default]/Visors[Default] を破壊しているため、
+            // FinishShapeshift だけでは復元できない。退避しておいた実データを直接辞書へ書き戻してから
+            // FinishShapeshift で描画を反映させる。
+            layer.hat1.gameObject.SetActive(true);
+            if (originalOutfit.Hat1Data != null)
+                layer.hat1.Hats[CustomOutfitType.Default] = originalOutfit.Hat1Data;
+            layer.hat1.FinishShapeshift(originalOutfit.ColorId);
+
+            layer.visor1.gameObject.SetActive(true);
+            if (originalOutfit.Visor1Data != null)
+                layer.visor1.Visors[CustomOutfitType.Default] = originalOutfit.Visor1Data;
+            layer.visor1.FinishShapeshift(originalOutfit.ColorId);
+
+            // hat2/visor2は SetActive(false) のみで内部データは壊れていないため、
+            // 通常通り FinishShapeshift で復元できる
             layer.hat2.gameObject.SetActive(true);
             layer.hat2.FinishShapeshift(originalOutfit.ColorId);
             layer.visor2.gameObject.SetActive(true);
@@ -218,6 +291,14 @@ public class CamouflagerAbility : AbilityBase
         public string Visor1Id { get; set; }
         public string Visor2Id { get; set; }
         public string PetId { get; set; }
+        // setOutfit(HatId="") を呼ぶと、CosmeticsPatches 経由で hat1.SetHat("", color) が
+        // 実行され、hat1.Hats[CustomOutfitType.Default] が空/null なハットで上書きされてしまう。
+        // これにより FinishShapeshift() 実行時に Hat（=Hats[Default]）が null となり、
+        // SetHat(int color) が早期returnして何も描画されなくなる（hat1/visor1が消えるバグの原因）。
+        // ProdId 文字列だけでなく、実際の ICosmeticData オブジェクト自体を退避しておき、
+        // 復元時に Hats 辞書へ直接書き戻すことで、setOutfit による破壊から守る。
+        public ICosmeticData Hat1Data { get; set; }
+        public ICosmeticData Visor1Data { get; set; }
     }
 }
 

@@ -154,7 +154,9 @@ public enum RoleId : short
     ElectionCommissioner,
     Orpheus,
     RocketLauncher,
-    Tasker
+    Tasker,
+    Cleaner,
+    MadCleaner
 }
 
 public enum GhostRoleId : short

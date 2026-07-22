@@ -15,6 +15,7 @@ public static class PlayerKickHelper
 
     private static bool IsAndroidPlatform(Platforms platform) =>
         platform == Platforms.Android ||
+        (int)platform == 112 || // Starlight（Android版AmongUsランチャー）が送るプラットフォーム値
         platform.ToString().IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0;
 
     private static bool IsUnclassifiedPlatform(Platforms platform)
