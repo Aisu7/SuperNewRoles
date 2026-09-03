@@ -49,7 +49,7 @@ public static class DynamicLobbies
         public static void Prefix([HarmonyArgument(0)] IGameOptions settings)
         {
             LobbyLimit = settings.MaxPlayers;
-            //GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.MaxPlayers, 15); // Force 15 Player Lobby on Server
+            GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.MaxPlayers, 15); // Force 15 Player Lobby on Server
             DataManager.Settings.Multiplayer.ChatMode = QuickChatModes.FreeChatOrQuickChat;
         }
         public static void Postfix([HarmonyArgument(0)] IGameOptions settings)
