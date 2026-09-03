@@ -104,7 +104,7 @@ public static class DynamicLobbies
             {
                 writer.WritePacked(gm.NetId);
                 writer.StartMessage((byte)4);
-                //writer.WriteBytesAndSize(gm.LogicOptions.gameOptionsFactory.ToBytes(options, AprilFoolsMode.IsAprilFoolsModeToggledOn));
+                writer.WriteBytesAndSize(gm.LogicOptions.gameOptionsFactory.ToBytes(options, AprilFoolsMode.IsAprilFoolsModeToggledOn));
                 writer.EndMessage();
             }
             writer.EndMessage();
