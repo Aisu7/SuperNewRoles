@@ -49,7 +49,7 @@ public static class DynamicLobbies
         public static void Prefix([HarmonyArgument(0)] IGameOptions settings)
         {
             LobbyLimit = settings.MaxPlayers;
-            GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.MaxPlayers, 15); // Force 15 Player Lobby on Server
+            //GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.MaxPlayers, 15); // Force 15 Player Lobby on Server
             DataManager.Settings.Multiplayer.ChatMode = QuickChatModes.FreeChatOrQuickChat;
         }
         public static void Postfix([HarmonyArgument(0)] IGameOptions settings)
@@ -82,7 +82,7 @@ public static class DynamicLobbies
             if (LobbyLimit != GameManager.Instance.LogicOptions.currentGameOptions.MaxPlayers)
             {
                 GameManager.Instance.LogicOptions.currentGameOptions.SetInt(Int32OptionNames.MaxPlayers, LobbyLimit);
-                FastDestroyableSingleton<GameStartManager>.Instance.LastPlayerCount = LobbyLimit;
+                //FastDestroyableSingleton<GameStartManager>.Instance.LastPlayerCount = LobbyLimit;
                 RpcSyncOption(GameManager.Instance.LogicOptions.currentGameOptions);
                 return $"ロビーの最大人数を{LobbyLimit}人に変更しました！";
             }
@@ -104,7 +104,7 @@ public static class DynamicLobbies
             {
                 writer.WritePacked(gm.NetId);
                 writer.StartMessage((byte)4);
-                writer.WriteBytesAndSize(gm.LogicOptions.gameOptionsFactory.ToBytes(options, AprilFoolsMode.IsAprilFoolsModeToggledOn));
+                //writer.WriteBytesAndSize(gm.LogicOptions.gameOptionsFactory.ToBytes(options, AprilFoolsMode.IsAprilFoolsModeToggledOn));
                 writer.EndMessage();
             }
             writer.EndMessage();
