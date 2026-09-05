@@ -231,6 +231,20 @@ OnboardingFaqBodyCol2,<b>Q. 公開ルームが存在しない</b>\nA. 誰も部�
 OnboardingEnjoyTitle,準備完了！,You're All Set!,准备完成！,準備完成！
 OnboardingEnjoyBody,<size=150%>これで全ての準備が整いました。\n\n<color=#ffa500>Super</color><color=#ff0000>New</color><color=#00ff00>Roles</color>を楽しみましょう！</size>,<size=150%>Everything is ready.\n\nEnjoy <color=#ffa500>Super</color><color=#ff0000>New</color><color=#00ff00>Roles</color>!</size>,<size=150%>一切准备就绪。\n\n尽情享受 <color=#ffa500>Super</color><color=#ff0000>New</color><color=#00ff00>Roles</color>！</size>,<size=150%>一切準備就緒。\n\n盡情享受 <color=#ffa500>Super</color><color=#ff0000>New</color><color=#00ff00>Roles</color>！</size>
 
+# RoomDiscovery
+RoomDiscoveryLoading,公開ルームの状況を取得中…,Checking public rooms…,,
+RoomDiscoveryBusy,その他、満員・開始中・開始済みの部屋：{0} 部屋,Other public rooms (full, starting, or started): {0},,
+RoomDiscoveryUnavailable,公開ルーム数を取得できませんでした,Could not load public room counts,,
+RoomDiscoveryRecommend,表示言語に合わせて {0} サーバーをおすすめします,For your display language we recommend the {0} server,,
+RoomDiscoverySwitch,{0} に変更する,Switch to {0},,
+RoomDiscoveryCreate,部屋を作成する,Create a room,,
+RoomDiscoveryDiscord,Discord\n(マッチメイキング),Discord\n(Find players),,
+RoomDiscoveryCreatePrompt1,波動砲をぶっ放そう！,Fire the Wave Cannon!
+RoomDiscoveryCreatePrompt2,いっぱいのスーパーな新しい役職で遊ぼう！,Play with tons of super new roles!
+RoomDiscoveryCreatePrompt3,ミーティングルームへ行こう！,Let's go to the meeting room!
+RoomDiscoveryCreatePrompt4,緊急会議を開くための部屋が必要です！,We need a room for meetings,
+
+
 # ClientOptions
 ClientOptionsVanilla,バニラ設定,Vanilla Settings,原版设置,原版設定
 ClientOptionsMod,Mod設定,Mod Settings,模组设置,模組設定
