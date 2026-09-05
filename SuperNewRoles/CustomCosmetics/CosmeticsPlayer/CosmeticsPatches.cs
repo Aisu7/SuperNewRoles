@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using AmongUs.Data;
 using HarmonyLib;
 using SuperNewRoles.CustomOptions.Categories;
@@ -344,14 +346,6 @@ public static class CosmeticsLayer_AnimateClimb
         customCosmeticsLayer?.visor2?.SetClimbAnim(__instance.bodyType);
     }
 }
-[HarmonyPatch(typeof(CosmeticsLayer), nameof(CosmeticsLayer.Visible), MethodType.Setter)]
-public static class CosmeticsLayer_Visible
-{
-    public static void Postfix(CosmeticsLayer __instance, bool value)
-    {
-        __instance.UpdateVisibility();
-    }
-}
 [HarmonyPatch(typeof(CosmeticsLayer), nameof(CosmeticsLayer.UpdateVisibility))]
 public static class CosmeticsLayer_UpdateVisibility
 {
@@ -362,6 +356,31 @@ public static class CosmeticsLayer_UpdateVisibility
         customCosmeticsLayer.hat2.Visible = __instance.visible;
         customCosmeticsLayer.visor1.Visible = __instance.visible;
         customCosmeticsLayer.visor2.Visible = __instance.visible;
+    }
+}
+[HarmonyPatch]
+public static class PlayerAnimations_RefreshCustomCosmeticsUpdates
+{
+    public static IEnumerable<MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(PlayerAnimations), nameof(PlayerAnimations.SetBodyType));
+        yield return AccessTools.Method(typeof(PlayerAnimations), nameof(PlayerAnimations.UpdateCosmeticOffset));
+    }
+
+    public static void Postfix(PlayerAnimations __instance)
+    {
+        // バニラは体型・オフセット変更時に現在のグループの全ノードを有効化する。
+        // 空装備のノードだけ停止し直し、装備済みレイヤーは次の更新で親を再同期する。
+        if (__instance.group?.NodeSyncs == null) return;
+        foreach (var node in __instance.group.NodeSyncs)
+        {
+            if (node == null) continue;
+            CustomHatLayer hatLayer = node.GetComponent<CustomHatLayer>();
+            if (hatLayer != null)
+                hatLayer.RefreshUpdateState();
+            else
+                node.GetComponent<CustomVisorLayer>()?.RefreshUpdateState();
+        }
     }
 }
 [HarmonyPatch(typeof(CosmeticsLayer), nameof(CosmeticsLayer.SetBodyCosmeticsVisible))]
