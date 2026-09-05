@@ -113,6 +113,31 @@ public sealed class WeavingTests
         Assert.Equal(false, merge.Invoke(null, new object[] { new[] { attribute }, new Dictionary<string, CustomAttributeArgument>() }));
     }
 
+    [Fact]
+    public void MissingExternalBaseReportsDependencyWithoutChangingDllOrSymbols()
+    {
+        using var fixture = new Fixture(weave: false);
+        using (var assembly = AssemblyDefinition.ReadAssembly(fixture.Path,
+                   new ReaderParameters { InMemory = true, ReadSymbols = true }))
+        {
+            var module = assembly.MainModule;
+            var dependency = new AssemblyNameReference("MissingRpcBaseDependency", new Version(1, 0, 0, 0));
+            module.AssemblyReferences.Add(dependency);
+            module.Types.Single(t => t.Name == "RpcFixture").BaseType =
+                new TypeReference("External", "RpcBase", module, dependency);
+            assembly.Write(fixture.Path, new WriterParameters { WriteSymbols = true });
+        }
+        var dll = File.ReadAllBytes(fixture.Path);
+        var pdbPath = System.IO.Path.ChangeExtension(fixture.Path, ".pdb");
+        var pdb = File.ReadAllBytes(pdbPath);
+        var error = Assert.Throws<InvalidOperationException>(() => RpcAssemblyWeaver.Weave(fixture.Path));
+        Assert.Contains("MissingRpcBaseDependency", error.Message);
+        Assert.Contains("RpcFixture", error.Message);
+        Assert.IsType<AssemblyResolutionException>(error.InnerException);
+        Assert.Equal(dll, File.ReadAllBytes(fixture.Path));
+        Assert.Equal(pdb, File.ReadAllBytes(pdbPath));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Path { get; }

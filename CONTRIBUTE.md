@@ -5,10 +5,22 @@
 ## 開発環境のセットアップ
 
 ### 必要条件
-- .NET 6.0 SDK
+- .NET 8.0 SDK以上（通常ビルドで実行するRPC Weaverが必要とします。.NET 6.0 SDKだけではビルドできません）
+- .NET 8.0ランタイム（RPC Weaverの実行と.NET 8テストに必要。SDK 8.0には同梱されています）
+- .NET 6.0ランタイム（PC向けHarmonyテストを実行する場合）
 - C#を編集できる環境(Visual Studio 2022 もしくは Visual Studio Codeを推奨)
 - Among Us（Steam版もしくはEpic Games版）
 - BepInEx
+
+### プロジェクトごとの.NET要件
+
+| プロジェクト | ターゲット |
+|---|---|
+| SuperNewRoles | .NET 6.0。ビルド中に.NET 8のRPC Weaverを実行します |
+| SuperNewRoles.RpcWeaver / RpcWeaver.Tests / RpcWeaver.Fixture / SuperNewRoles.Tests | .NET 8.0 |
+| SuperNewRoles.Harmony.Tests | 通常は.NET 6.0。Android APK抽出coreの検証を`TestRuntime=net10.0`で行う場合は.NET 10 SDK・ランタイムも必要です |
+
+新しいSDKだけをインストールする場合も、実行対象の.NET 8／.NET 6ランタイムを別途確認してください。ゲーム用DLLのターゲットは.NET 6.0のままです。
 
 ### 環境構築手順
 

@@ -12,9 +12,23 @@ public static class RpcAssemblyWeaver
 
     private static bool IsAbilityType(TypeDefinition type)
     {
-        for (TypeDefinition? current = type; current != null; current = current.BaseType?.Resolve())
+        for (TypeDefinition? current = type; current != null;)
+        {
             if (current.FullName == "SuperNewRoles.Roles.Ability.AbilityBase")
                 return true;
+            var baseType = current.BaseType;
+            if (baseType == null) break;
+            try
+            {
+                current = baseType.Resolve() ?? throw new InvalidOperationException(
+                    $"Cannot validate RPC owner {type.FullName}: base type {baseType.FullName} in {baseType.Scope} was not found.");
+            }
+            catch (AssemblyResolutionException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot validate RPC owner {type.FullName}: dependency {ex.AssemblyReference.FullName} for base type {baseType.FullName} could not be resolved. Supply its directory through referencesFile.", ex);
+            }
+        }
         return false;
     }
 
