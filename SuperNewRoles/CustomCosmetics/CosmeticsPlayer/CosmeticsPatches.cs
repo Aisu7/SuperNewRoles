@@ -346,16 +346,31 @@ public static class CosmeticsLayer_AnimateClimb
         customCosmeticsLayer?.visor2?.SetClimbAnim(__instance.bodyType);
     }
 }
+[HarmonyPatch(typeof(CosmeticsLayer), nameof(CosmeticsLayer.Visible), MethodType.Setter)]
+public static class CosmeticsLayer_Visible
+{
+    public static void Postfix(CosmeticsLayer __instance)
+    {
+        // IL2CPPではsetter内に表示更新がインライン化され、UpdateVisibilityのパッチを通らない。
+        // 本体の更新は繰り返さず、lockVisible適用後の実際の状態を追加衣装に同期する。
+        CosmeticsLayer_UpdateVisibility.ApplyCustomVisibility(__instance);
+    }
+}
 [HarmonyPatch(typeof(CosmeticsLayer), nameof(CosmeticsLayer.UpdateVisibility))]
 public static class CosmeticsLayer_UpdateVisibility
 {
     public static void Postfix(CosmeticsLayer __instance)
     {
-        CustomCosmeticsLayer customCosmeticsLayer = CustomCosmeticsLayers.ExistsOrInitialize(__instance);
-        customCosmeticsLayer.hat1.Visible = __instance.visible;
-        customCosmeticsLayer.hat2.Visible = __instance.visible;
-        customCosmeticsLayer.visor1.Visible = __instance.visible;
-        customCosmeticsLayer.visor2.Visible = __instance.visible;
+        ApplyCustomVisibility(__instance);
+    }
+
+    internal static void ApplyCustomVisibility(CosmeticsLayer cosmeticsLayer)
+    {
+        CustomCosmeticsLayer customCosmeticsLayer = CustomCosmeticsLayers.ExistsOrInitialize(cosmeticsLayer);
+        customCosmeticsLayer.hat1.Visible = cosmeticsLayer.visible;
+        customCosmeticsLayer.hat2.Visible = cosmeticsLayer.visible;
+        customCosmeticsLayer.visor1.Visible = cosmeticsLayer.visible;
+        customCosmeticsLayer.visor2.Visible = cosmeticsLayer.visible;
     }
 }
 [HarmonyPatch]
