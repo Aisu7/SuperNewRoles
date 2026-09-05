@@ -10,6 +10,14 @@ public static class RpcAssemblyWeaver
     private const string WovenAttribute = "SuperNewRoles.Modules.WovenRpcAttribute";
     private const int Version = 1;
 
+    private static bool IsAbilityType(TypeDefinition type)
+    {
+        for (TypeDefinition? current = type; current != null; current = current.BaseType?.Resolve())
+            if (current.FullName == "SuperNewRoles.Roles.Ability.AbilityBase")
+                return true;
+        return false;
+    }
+
     public static int Weave(string assemblyPath, string? referencesFile = null)
     {
         assemblyPath = Path.GetFullPath(assemblyPath);
@@ -33,6 +41,9 @@ public static class RpcAssemblyWeaver
         // Validate the entire assembly before changing any method.
         foreach (var method in methods)
         {
+            // Match CustomRPCManager.Load: instance RPCs require AbilityBase ownership.
+            if (!method.IsStatic && !IsAbilityType(method.DeclaringType))
+                throw new NotSupportedException($"RPC instance must derive from AbilityBase: {method.FullName}");
             if (!method.HasBody || method.DeclaringType.IsValueType || method.ReturnType.MetadataType != MetadataType.Void ||
                 method.HasGenericParameters || HasGenericDeclaringType(method.DeclaringType) ||
                 method.Parameters.Any(p => p.ParameterType.IsByReference || p.ParameterType.IsPointer || p.ParameterType.IsFunctionPointer))

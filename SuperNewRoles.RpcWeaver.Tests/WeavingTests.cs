@@ -76,6 +76,43 @@ public sealed class WeavingTests
         Assert.Equal(bytes, File.ReadAllBytes(fixture.Path));
     }
 
+    [Fact]
+    public void NonAbilityInstanceRpcFailsBeforeChangingAssembly()
+    {
+        using var fixture = new Fixture(weave: false);
+        using (var assembly = AssemblyDefinition.ReadAssembly(fixture.Path, new ReaderParameters { InMemory = true }))
+        {
+            assembly.MainModule.Types.Single(t => t.Name == "RpcFixture").BaseType = assembly.MainModule.TypeSystem.Object;
+            assembly.Write(fixture.Path);
+        }
+        File.Delete(System.IO.Path.ChangeExtension(fixture.Path, ".pdb"));
+        var bytes = File.ReadAllBytes(fixture.Path);
+        var error = Assert.Throws<NotSupportedException>(() => RpcAssemblyWeaver.Weave(fixture.Path));
+        Assert.Contains("AbilityBase", error.Message);
+        Assert.Equal(bytes, File.ReadAllBytes(fixture.Path));
+    }
+
+    [Fact]
+    public void MissingHarmonyMetadataTypeReturnsFalse()
+    {
+        var method = typeof(HarmonyRegistryWeaver).GetMethod("HasHarmonyMetadata", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.Equal(false, method.Invoke(null, new object?[] { null }));
+    }
+
+    [Fact]
+    public void MissingHarmonyConstructorFallsBack()
+    {
+        using var module = ModuleDefinition.CreateModule("missing-constructor", ModuleKind.Dll);
+        var type = new TypeDefinition("HarmonyLib", "HarmonyPatch", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+        module.Types.Add(type);
+        var constructor = new MethodReference(".ctor", module.TypeSystem.Void, type) { HasThis = true };
+        constructor.Parameters.Add(new ParameterDefinition(module.TypeSystem.String));
+        var attribute = new CustomAttribute(constructor);
+        attribute.ConstructorArguments.Add(new CustomAttributeArgument(module.TypeSystem.String, "Target"));
+        var merge = typeof(HarmonyRegistryWeaver).GetMethod("Merge", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.Equal(false, merge.Invoke(null, new object[] { new[] { attribute }, new Dictionary<string, CustomAttributeArgument>() }));
+    }
+
     private sealed class Fixture : IDisposable
     {
         public string Path { get; }

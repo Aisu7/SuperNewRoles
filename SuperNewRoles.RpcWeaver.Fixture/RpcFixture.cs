@@ -20,7 +20,7 @@ public static class CustomRPCManager
     public static bool ShouldExecuteWovenRpc(int id, object? instance, object[] args) => Entry(id, instance, args);
 }
 
-public class RpcFixture
+public class RpcFixture : SuperNewRoles.Roles.Ability.AbilityBase
 {
     public static int Runs;
     public static int FinallyRuns;

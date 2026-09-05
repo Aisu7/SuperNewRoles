@@ -191,7 +191,13 @@ public static class HarmonyRegistryWeaver
                         };
                         if (field == null || arg.Value == null) return false;
                         // The string-only declaring-type overload is deliberately not precomputed.
-                        if (arg.Type.FullName == "System.String" && attribute.Constructor.Resolve().Parameters.Any(p => p.Name == "typeName")) return false;
+                        if (arg.Type.FullName == "System.String")
+                        {
+                            MethodDefinition? constructor;
+                            try { constructor = attribute.Constructor.Resolve(); }
+                            catch (AssemblyResolutionException) { return false; }
+                            if (constructor == null || constructor.Parameters.Any(p => p.Name == "typeName")) return false;
+                        }
                         fields[field] = arg;
                     }
                     break;
@@ -213,8 +219,9 @@ public static class HarmonyRegistryWeaver
         return false;
     }
 
-    private static bool HasHarmonyMetadata(TypeDefinition type) => type.CustomAttributes.Any(IsHarmonyMetadata) ||
-        (type.BaseType != null && type.BaseType.FullName != "System.Object" && HasHarmonyMetadata(type.BaseType.Resolve()));
+    private static bool HasHarmonyMetadata(TypeDefinition? type) => type != null &&
+        (type.CustomAttributes.Any(IsHarmonyMetadata) ||
+        (type.BaseType != null && type.BaseType.FullName != "System.Object" && HasHarmonyMetadata(type.BaseType.Resolve())));
 
     private static bool HasGenericOwner(TypeDefinition? type) => type != null && (type.HasGenericParameters || HasGenericOwner(type.DeclaringType));
 
