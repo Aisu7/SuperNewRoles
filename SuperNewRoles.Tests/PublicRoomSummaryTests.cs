@@ -15,10 +15,10 @@ public class PublicRoomSummaryTests
 
         Assert.True(PublicRoomSummary.TryParse(json, out var summary));
         Assert.Equal(6, summary.Total);
-        Assert.Equal(3, summary.Busy);
+        Assert.Equal(4, summary.Busy);
     }
 
-    // 目的: 満員と開始中は1部屋1回だけ数え、空き部屋と破棄済みは busy に入れないこと
+    // 目的: 満員・開始中・終了は1部屋1回だけ数え、空き部屋と破棄済みは busy に入れないこと
     [Fact]
     public void CountsFullAndStartingRoomsOnceAndExcludesAvailableOrDestroyedRooms()
     {
@@ -28,12 +28,14 @@ public class PublicRoomSummaryTests
             Game(1, 15, 15),          // 開始中の満員 → busy（二重計上しない）
             Game("Starting", 3, 15),  // 開始中 → busy
             Game(2, 15, 15),          // 開始済み → busy
+            Game(3, 3, 15),           // 終了済み（空きあり） → busy
+            Game("Ended", 15, 15),    // 終了済み満員 → busy（二重計上しない）
             Game(4, 15, 15),          // 破棄済み満員 → 除外
             Game(0, 0, 0)));          // 不正な定員 → どちらにも含めない
 
         Assert.True(PublicRoomSummary.TryParse(json, out var summary));
-        Assert.Equal(7, summary.Total);
-        Assert.Equal(4, summary.Busy);
+        Assert.Equal(9, summary.Total);
+        Assert.Equal(6, summary.Busy);
         Assert.Equal(1, summary.Joinable);
     }
 

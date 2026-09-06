@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Linq;
 using AmongUs.Data;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
@@ -51,6 +50,7 @@ public static class CustomServerRoomDiscoveryPatch
     private static Vector3[] listingScales;
     private static bool listingsCompacted;
     private static float nextUiUpdate;
+    private static bool panelCreateFailed;
 
     /// <summary>
     /// 現在のリージョンが SNR サーバーなら API のベース URL を返す。それ以外は null。
@@ -105,11 +105,8 @@ public static class CustomServerRoomDiscoveryPatch
         if (owner == manager)
             return;
 
-        if (panel != null)
-            UnityEngine.Object.Destroy(panel);
-
+        DestroyPanel();
         owner = manager;
-        panel = null;
         regionUrl = null;
         fetching = false;
         roomInfoReady = false;
@@ -119,6 +116,7 @@ public static class CustomServerRoomDiscoveryPatch
         listingScales = null;
         listingsCompacted = false;
         nextUiUpdate = 0;
+        panelCreateFailed = false;
     }
 
     private static void HidePanel(FindAGameManager manager)
@@ -173,10 +171,8 @@ public static class CustomServerRoomDiscoveryPatch
         if (fetching || Time.unscaledTime < nextRefresh)
             return;
 
+        // 定期更新中は前回の件数と作成導線を残す。失敗時だけ ShowUnavailable で消す。
         fetching = true;
-        roomInfoReady = false;
-        lastJoinable = -1;
-        HideCreateOffer();
         nextRefresh = Time.unscaledTime + RefreshInterval;
         manager.StartCoroutine(Refresh(manager, url).WrapToIl2Cpp());
     }
@@ -261,7 +257,7 @@ public static class CustomServerRoomDiscoveryPatch
     // RefreshList 自体はクールダウンで空振りすることがあるので、実際の検索中は animLoad を見る。
     private static bool ShouldShowCreate(FindAGameManager manager)
     {
-        if (!roomInfoReady || fetching || lastJoinable != 0 || !listingsReady)
+        if (!roomInfoReady || lastJoinable != 0 || !listingsReady)
             return false;
         if (manager == null || IsVanillaSearching(manager) || HasVisibleListings(manager))
             return false;
@@ -323,36 +319,57 @@ public static class CustomServerRoomDiscoveryPatch
 
     private static void CreatePanel(FindAGameManager manager)
     {
-        if (manager.TotalText == null || manager.container == null)
+        if (panelCreateFailed || manager.TotalText == null || manager.container == null)
             return;
 
-        panel = new GameObject("SNRRoomDiscovery");
-        // バニラのコンテナに付けて、スライド演出と表示状態を追従させる。
-        panel.transform.SetParent(manager.container, false);
+        try
+        {
+            panel = new GameObject("SNRRoomDiscovery");
+            // バニラのコンテナに付けて、スライド演出と表示状態を追従させる。
+            panel.transform.SetParent(manager.container, false);
 
-        summaryText = AddText(manager, "StartedRooms", new Vector3(0.1f, -2.12f, -5), 1.6f);
-        summaryText.rectTransform.sizeDelta = new Vector2(4.8f, 0.4f);
+            summaryText = AddText(manager, "StartedRooms", new Vector3(0.1f, -2.12f, -5), 1.6f);
+            summaryText.rectTransform.sizeDelta = new Vector2(4.8f, 0.4f);
 
-        recommendationText = AddText(manager, "RegionRecommendation", new Vector3(0.1f, -1.34f, -5), 1.4f);
-        recommendationText.rectTransform.sizeDelta = new Vector2(5.6f, 0.4f);
+            recommendationText = AddText(manager, "RegionRecommendation", new Vector3(0.1f, -1.34f, -5), 1.4f);
+            recommendationText.rectTransform.sizeDelta = new Vector2(5.6f, 0.4f);
 
-        regionButton = AddButton("SwitchRegion", new Vector3(0.1f, -1.69f, -5), SwitchToRecommendedRegion, scaleOverride: 0.35f);
-        createButton = AddButton("CreateRoom", new Vector3(0.1f, 0, -5), OpenCreateGame, 2.4f);
-        createButton.GetComponentInChildren<TextMeshPro>().text = ModTranslation.GetString("RoomDiscoveryCreate");
-        createButton.gameObject.SetActive(false);
+            regionButton = AddButton("SwitchRegion", new Vector3(0.1f, -1.69f, -5), SwitchToRecommendedRegion, scaleOverride: 0.35f);
+            createButton = AddButton("CreateRoom", new Vector3(0.1f, 0, -5), OpenCreateGame, 2.4f);
+            createButton.GetComponentInChildren<TextMeshPro>().text = ModTranslation.GetString("RoomDiscoveryCreate");
+            createButton.gameObject.SetActive(false);
 
-        createPromptText = AddText(manager, "CreateRoomPrompt", new Vector3(0.1f, 0.5f, -5), 1.2f);
-        createPromptText.transform.localScale = Vector3.one * 2f;
-        createPromptText.rectTransform.sizeDelta = new Vector2(5.8f, 0.5f);
-        createPromptText.gameObject.SetActive(false);
+            createPromptText = AddText(manager, "CreateRoomPrompt", new Vector3(0.1f, 0.5f, -5), 1.2f);
+            createPromptText.transform.localScale = Vector3.one * 2f;
+            createPromptText.rectTransform.sizeDelta = new Vector2(5.8f, 0.5f);
+            createPromptText.gameObject.SetActive(false);
 
-        var discord = AddButton(
-            "MatchmakingDiscord",
-            new Vector3(2.9f, -2.62f, -5),
-            () => Constants.OpenURL(SocialLinks.DiscordServer),
-            2.4f,
-            useDiscordTemplate: true);
-        discord.GetComponentInChildren<TextMeshPro>().text = ModTranslation.GetString("RoomDiscoveryDiscord");
+            var discord = AddButton(
+                "MatchmakingDiscord",
+                new Vector3(2.9f, -2.62f, -5),
+                () => Constants.OpenURL(SocialLinks.DiscordServer),
+                2.4f,
+                useDiscordTemplate: true);
+            discord.GetComponentInChildren<TextMeshPro>().text = ModTranslation.GetString("RoomDiscoveryDiscord");
+        }
+        catch (Exception e)
+        {
+            Logger.Error($"CustomServerRoomDiscovery UI construction failed: {e}");
+            DestroyPanel();
+            panelCreateFailed = true;
+        }
+    }
+
+    private static void DestroyPanel()
+    {
+        if (panel != null)
+            UnityEngine.Object.Destroy(panel);
+        panel = null;
+        summaryText = null;
+        recommendationText = null;
+        regionButton = null;
+        createButton = null;
+        createPromptText = null;
     }
 
     private static void SwitchToRecommendedRegion()

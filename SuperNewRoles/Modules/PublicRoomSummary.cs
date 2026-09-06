@@ -82,9 +82,9 @@ public readonly struct PublicRoomSummary
         bool hasOccupancy = TryGetOccupancy(game, out bool isFull);
         // 待機中かつ空きがある部屋だけ参加可能。終了・破棄は「部屋作成」を抑止しない。
         isJoinable = state == RoomState.NotStarted && hasOccupancy && !isFull;
-        // 開始中・開始済み、または満員（破棄済み以外）を1部屋につき1回だけ数える。
-        isBusy = state is RoomState.Starting or RoomState.Started ||
-                 (isFull && state != RoomState.Destroyed);
+        // 開始中・開始済み・終了、または満員の待機部屋を1部屋につき1回だけ数える。破棄済みは除外する。
+        isBusy = state is RoomState.Starting or RoomState.Started or RoomState.Ended ||
+                 (isFull && state == RoomState.NotStarted);
         return true;
     }
 
