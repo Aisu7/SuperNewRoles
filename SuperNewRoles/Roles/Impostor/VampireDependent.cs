@@ -53,16 +53,27 @@ public class VampireDependentAbility : AbilityBase
     private DeviceCanUseAbility deviceCanUseAbility;
     private HideInAdminAbility hideInAdminAbility;
     private ReverseVisionAbility reverseVisionAbility;
+    private bool _hasVampire;
 
+    /// <summary>
+    /// 眷属の能力設定と、親ヴァンパイアから引き継ぐ設定を保持します。
+    /// </summary>
+    /// <param name="data">眷属固有の能力設定。</param>
+    /// <param name="vampire">親ヴァンパイアから引き継ぐ能力設定。</param>
     public VampireDependentAbility(VampireDependentData data, VampireData vampire)
     {
         this.Data = data;
         this.VampireData = vampire;
     }
 
+    /// <summary>
+    /// 全プレイヤーで使用する能力と、親ヴァンパイアの死亡監視を登録します。
+    /// </summary>
     public override void AttachToAlls()
     {
         base.AttachToAlls();
+        SubscribeWithAbility(FixedUpdateEvent.Instance, OnFixedUpdate);
+
         killButtonAbility = new CustomKillButtonAbility(
             canKill: () => true,
             killCooldown: () => Data.killCooldown,
@@ -93,14 +104,19 @@ public class VampireDependentAbility : AbilityBase
         Player.AttachAbility(new KnowOtherAbility((player) => player.Player == vampire?.Player, () => true), new AbilityParentAbility(this));
     }
 
+    /// <summary>
+    /// ローカルプレイヤー向けに、親ヴァンパイアの名前表示更新を登録します。
+    /// </summary>
     public override void AttachToLocalPlayer()
     {
         base.AttachToLocalPlayer();
-        SubscribeWithAbility(MurderEvent.Instance, OnMurder);
-        SubscribeWithAbility(ExileEvent.Instance, OnExile);
         SubscribeWithAbility(NameTextUpdateEvent.Instance, OnNameTextUpdate);
     }
 
+    /// <summary>
+    /// 親ヴァンパイアの名前をインポスター陣営の色で表示します。
+    /// </summary>
+    /// <param name="data">名前表示を更新するプレイヤーの情報。</param>
     private void OnNameTextUpdate(NameTextUpdateEventData data)
     {
         // 親ヴァンパイアの名前に印を付ける
@@ -110,20 +126,27 @@ public class VampireDependentAbility : AbilityBase
         }
     }
 
-    private void OnMurder(MurderEventData data)
+    /// <summary>
+    /// ホスト上で親ヴァンパイアの死亡を監視し、生存中の眷属を自殺させます。
+    /// </summary>
+    private void OnFixedUpdate()
     {
-        if (data.target == vampire?.Player && Player.IsAlive() && data.resultFlags.HasFlag(MurderResultFlags.Succeeded))
-            ExPlayerControl.LocalPlayer.RpcCustomDeath(CustomDeathType.VampireWithDead);
+        if (!AmongUsClient.Instance.AmHost) return;
+        if (!_hasVampire) return;
+        if (Player.IsDead()) return;
+
+        if (vampire?.Player != null && vampire.Player.IsAlive()) return;
+
+        Player.RpcCustomDeath(CustomDeathType.Suicide);
     }
 
-    private void OnExile(ExileEventData data)
-    {
-        if (data.exiled == vampire?.Player && Player.IsAlive())
-            ExPlayerControl.LocalPlayer.RpcCustomDeath(CustomDeathType.VampireWithDeadNonDeadbody);
-    }
-
+    /// <summary>
+    /// 親ヴァンパイアを設定し、死亡監視を有効にします。
+    /// </summary>
+    /// <param name="vampire">この眷属を生成した親ヴァンパイア。</param>
     public void SetVampire(VampireAbility vampire)
     {
         this.vampire = vampire;
+        _hasVampire = true;
     }
 }
