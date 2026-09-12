@@ -53,18 +53,26 @@ public class VampireDependentAbility : AbilityBase
     private DeviceCanUseAbility deviceCanUseAbility;
     private HideInAdminAbility hideInAdminAbility;
     private ReverseVisionAbility reverseVisionAbility;
+    private bool _hasVampire;
 
+    /// <summary>
+    /// 眷属の能力設定と、親ヴァンパイアから引き継ぐ設定を保持します。
+    /// </summary>
+    /// <param name="data">眷属固有の能力設定。</param>
+    /// <param name="vampire">親ヴァンパイアから引き継ぐ能力設定。</param>
     public VampireDependentAbility(VampireDependentData data, VampireData vampire)
     {
         this.Data = data;
         this.VampireData = vampire;
     }
 
+    /// <summary>
+    /// 全プレイヤーで使用する能力と、親ヴァンパイアの死亡監視を登録します。
+    /// </summary>
     public override void AttachToAlls()
     {
         base.AttachToAlls();
-        _murderListener = MurderEvent.Instance.AddListener(OnMurder);
-        _exileListener = ExileEvent.Instance.AddListener(OnExile);
+        SubscribeWithAbility(FixedUpdateEvent.Instance, OnFixedUpdate);
 
         killButtonAbility = new CustomKillButtonAbility(
             canKill: () => true,
@@ -96,25 +104,19 @@ public class VampireDependentAbility : AbilityBase
         Player.AttachAbility(new KnowOtherAbility((player) => player.Player == vampire?.Player, () => true), new AbilityParentAbility(this));
     }
 
-    public override void DetachToAlls()
-    {
-        base.DetachToAlls();
-        _murderListener?.RemoveListener();
-        _exileListener?.RemoveListener();
-    }
-
+    /// <summary>
+    /// ローカルプレイヤー向けに、親ヴァンパイアの名前表示更新を登録します。
+    /// </summary>
     public override void AttachToLocalPlayer()
     {
         base.AttachToLocalPlayer();
-        _nameTextUpdateListener = NameTextUpdateEvent.Instance.AddListener(OnNameTextUpdate);
+        SubscribeWithAbility(NameTextUpdateEvent.Instance, OnNameTextUpdate);
     }
 
-    public override void DetachToLocalPlayer()
-    {
-        base.DetachToLocalPlayer();
-        _nameTextUpdateListener?.RemoveListener();
-    }
-
+    /// <summary>
+    /// 親ヴァンパイアの名前をインポスター陣営の色で表示します。
+    /// </summary>
+    /// <param name="data">名前表示を更新するプレイヤーの情報。</param>
     private void OnNameTextUpdate(NameTextUpdateEventData data)
     {
         // 親ヴァンパイアの名前に印を付ける
@@ -124,39 +126,27 @@ public class VampireDependentAbility : AbilityBase
         }
     }
 
-    private void OnMurder(MurderEventData data)
+    /// <summary>
+    /// ホスト上で親ヴァンパイアの死亡を監視し、生存中の眷属を自殺させます。
+    /// </summary>
+    private void OnFixedUpdate()
     {
-        // ホストのみが眷属の死亡処理を行う（全クライアントで重複実行しないよう制御）
         if (!AmongUsClient.Instance.AmHost) return;
-        // vampire?.Player の場合に data.target == null で意図せず一致するのを避ける）。
-        if (vampire == null) return;
-        if (data.target == vampire.Player && Player.IsAlive())
-            Player.RpcCustomDeath(CustomDeathType.VampireWithDead);
+        if (!_hasVampire) return;
+        if (Player.IsDead()) return;
+
+        if (vampire?.Player != null && vampire.Player.IsAlive()) return;
+
+        Player.RpcCustomDeath(CustomDeathType.Suicide);
     }
 
-    private void OnExile(ExileEventData data)
-    {
-        // ホストのみが眷属の死亡処理を行う（全クライアントで重複実行しないよう制御）
-        if (!AmongUsClient.Instance.AmHost) return;
-
-        // OnMurder と同様、vampire が未設定の間は判定しない
-        if (vampire == null) return;
-        if (data.exiled == vampire.Player && Player.IsAlive())
-            Player.RpcCustomDeath(CustomDeathType.VampireWithDeadNonDeadbody);
-    }
-
+    /// <summary>
+    /// 親ヴァンパイアを設定し、死亡監視を有効にします。
+    /// </summary>
+    /// <param name="vampire">この眷属を生成した親ヴァンパイア。</param>
     public void SetVampire(VampireAbility vampire)
     {
         this.vampire = vampire;
-
-        // 眷属化は LateTask で 0.1 秒後に実行されるため、その間にヴァンパイアが
-        // キル・追放された場合、OnMurder/OnExile 発火時点では vampire がまだ null で
-        // 判定できず、眷属が道連れにならずに生き残ってしまうレースコンディションがある。
-        // SetVampire 実行時点で既にヴァンパイアが死亡していないか確認し、
-        // 死亡していれば取りこぼした死亡処理をここで代わりに行う。
-        if (!AmongUsClient.Instance.AmHost) return;
-        if (vampire?.Player == null) return;
-        if (vampire.Player.IsDead() && Player.IsAlive())
-            Player.RpcCustomDeath(CustomDeathType.VampireWithDead);
+        _hasVampire = true;
     }
 }
