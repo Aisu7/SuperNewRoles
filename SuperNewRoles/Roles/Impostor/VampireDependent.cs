@@ -53,6 +53,7 @@ public class VampireDependentAbility : AbilityBase
     private DeviceCanUseAbility deviceCanUseAbility;
     private HideInAdminAbility hideInAdminAbility;
     private ReverseVisionAbility reverseVisionAbility;
+    private bool _hasVampire;
 
     public VampireDependentAbility(VampireDependentData data, VampireData vampire)
     {
@@ -63,8 +64,7 @@ public class VampireDependentAbility : AbilityBase
     public override void AttachToAlls()
     {
         base.AttachToAlls();
-        _murderListener = MurderEvent.Instance.AddListener(OnMurder);
-        _exileListener = ExileEvent.Instance.AddListener(OnExile);
+        SubscribeWithAbility(FixedUpdateEvent.Instance, OnFixedUpdate);
 
         killButtonAbility = new CustomKillButtonAbility(
             canKill: () => true,
@@ -96,23 +96,10 @@ public class VampireDependentAbility : AbilityBase
         Player.AttachAbility(new KnowOtherAbility((player) => player.Player == vampire?.Player, () => true), new AbilityParentAbility(this));
     }
 
-    public override void DetachToAlls()
-    {
-        base.DetachToAlls();
-        _murderListener?.RemoveListener();
-        _exileListener?.RemoveListener();
-    }
-
     public override void AttachToLocalPlayer()
     {
         base.AttachToLocalPlayer();
-        _nameTextUpdateListener = NameTextUpdateEvent.Instance.AddListener(OnNameTextUpdate);
-    }
-
-    public override void DetachToLocalPlayer()
-    {
-        base.DetachToLocalPlayer();
-        _nameTextUpdateListener?.RemoveListener();
+        SubscribeWithAbility(NameTextUpdateEvent.Instance, OnNameTextUpdate);
     }
 
     private void OnNameTextUpdate(NameTextUpdateEventData data)
@@ -124,39 +111,20 @@ public class VampireDependentAbility : AbilityBase
         }
     }
 
-    private void OnMurder(MurderEventData data)
+    private void OnFixedUpdate()
     {
-        // ホストのみが眷属の死亡処理を行う（全クライアントで重複実行しないよう制御）
         if (!AmongUsClient.Instance.AmHost) return;
-        // vampire?.Player の場合に data.target == null で意図せず一致するのを避ける）。
-        if (vampire == null) return;
-        if (data.target == vampire.Player && Player.IsAlive())
-            Player.RpcCustomDeath(CustomDeathType.VampireWithDead);
-    }
+        if (!_hasVampire) return;
+        if (Player.IsDead()) return;
 
-    private void OnExile(ExileEventData data)
-    {
-        // ホストのみが眷属の死亡処理を行う（全クライアントで重複実行しないよう制御）
-        if (!AmongUsClient.Instance.AmHost) return;
+        if (vampire?.Player != null && vampire.Player.IsAlive()) return;
 
-        // OnMurder と同様、vampire が未設定の間は判定しない
-        if (vampire == null) return;
-        if (data.exiled == vampire.Player && Player.IsAlive())
-            Player.RpcCustomDeath(CustomDeathType.VampireWithDeadNonDeadbody);
+        Player.RpcCustomDeath(CustomDeathType.Suicide);
     }
 
     public void SetVampire(VampireAbility vampire)
     {
         this.vampire = vampire;
-
-        // 眷属化は LateTask で 0.1 秒後に実行されるため、その間にヴァンパイアが
-        // キル・追放された場合、OnMurder/OnExile 発火時点では vampire がまだ null で
-        // 判定できず、眷属が道連れにならずに生き残ってしまうレースコンディションがある。
-        // SetVampire 実行時点で既にヴァンパイアが死亡していないか確認し、
-        // 死亡していれば取りこぼした死亡処理をここで代わりに行う。
-        if (!AmongUsClient.Instance.AmHost) return;
-        if (vampire?.Player == null) return;
-        if (vampire.Player.IsDead() && Player.IsAlive())
-            Player.RpcCustomDeath(CustomDeathType.VampireWithDead);
+        _hasVampire = true;
     }
 }
