@@ -83,28 +83,33 @@ public static class CustomTaskTypePatches
         {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
             if (customTaskTypeAbility == null) return;
-
+    
             if (!customTaskTypeAbility.ShouldChangeTask()) return;
-
+    
             __instance.CanUse(PlayerControl.LocalPlayer.Data, out bool canUse, out bool _);
             if (!canUse) return;
-
+    
             PlayerTask task = __instance.FindTask(PlayerControl.LocalPlayer);
-            if (task.TaskType is TaskTypes.FixLights or TaskTypes.RestoreOxy or TaskTypes.ResetReactor or
-                TaskTypes.ResetSeismic or TaskTypes.FixComms or TaskTypes.StopCharles or TaskTypes.MushroomMixupSabotage)
+            if (task == null)
                 return;
-
+    
+            if (task.GetType().BaseType?.Name == "SabotageTask")
+                return;
+    
+            if (task.TaskType is TaskTypes.FixLights or TaskTypes.RestoreOxy or TaskTypes.ResetReactor or TaskTypes.ResetSeismic or TaskTypes.FixComms or TaskTypes.StopCharles or TaskTypes.MushroomMixupSabotage)
+                return;
+    
             preMinigame = task.MinigamePrefab;
             GetTargetShip(customTaskTypeAbility.TargetMap, (ship) =>
             {
-                var targetTask = GetTargetTaskFromShip(ship, customTaskTypeAbility.TargetTaskType);
-                if (targetTask != null)
-                {
-                    task.MinigamePrefab = targetTask.MinigamePrefab;
-                }
+            var targetTask = GetTargetTaskFromShip(ship, customTaskTypeAbility.TargetTaskType);
+            if (targetTask != null)
+            {
+                task.MinigamePrefab = targetTask.MinigamePrefab;
+            }
             });
         }
-
+        
         static void Postfix(Console __instance)
         {
             var customTaskTypeAbility = ExPlayerControl.LocalPlayer.GetAbility<CustomTaskTypeAbility>();
