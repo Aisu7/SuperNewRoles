@@ -42,6 +42,12 @@
         <Reference Include="@(LibReference)" />
     </ItemGroup>
 
+    <!-- Submerged 参照（存在する場合のみ） -->
+    <ItemGroup Condition="Exists('$(AmongUs)/BepInEx/plugins/Submerged.dll')">
+        <Reference Include="$(AmongUs)/BepInEx/plugins/Submerged.dll" />
+        <Compile Remove="Patches\SubmergedExileCutscenePatches\**" />
+    </ItemGroup>
+
     <!-- SDKスタイルの既定glob (Compile **/*.cs) からGenerated/を除外し、
          明示Includeでのみ拾うことで重複(CS2002)を回避する -->
     <ItemGroup>
@@ -112,6 +118,11 @@ namespace SuperNewRoles
     <PropertyGroup Condition="'$(EnableHarmonyRegistry)' == 'true'">
         <DefineConstants>$(DefineConstants);SNR_HARMONY_REGISTRY</DefineConstants>
     </PropertyGroup>
+    
+    <!-- Submerged が存在する場合のみコンパイル定数を設定 -->
+    <PropertyGroup Condition="Exists('$(AmongUs)/BepInEx/plugins/Submerged.dll')">
+        <DefineConstants>$(DefineConstants);SUBMERGED_INSTALLED</DefineConstants>
+    </PropertyGroup>
 
     <ItemGroup>
     <PackageReference Include="GitInfo" Version="2.0.20">
@@ -129,3 +140,4 @@ namespace SuperNewRoles
     </ItemGroup>
     
 </Project>
+
