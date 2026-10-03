@@ -35,7 +35,7 @@ class EvilSeer : RoleBase<EvilSeer>
 
     public override QuoteMod QuoteMod { get; } = QuoteMod.SuperNewRoles;
     public override RoleTypes IntroSoundType { get; } = RoleTypes.Phantom;
-    public override short IntroNum { get; } = 1;
+    public override short IntroNum { get; } = 2;
 
     public override AssignedTeamType AssignedTeam { get; } = AssignedTeamType.Impostor;
     public override WinnerTeamType WinnerTeam { get; } = WinnerTeamType.Impostor;
